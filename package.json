@@ -1,0 +1,22 @@
+{
+  "name": "vividcraft",
+  "version": "1.0.0",
+  "private": true,
+  "description": "VividCraft - Distributed Microservices Digital Art & Comic Marketplace",
+  "scripts": {
+    "dev": "docker compose up --build",
+    "dev:detached": "docker compose up --build -d",
+    "dev:down": "docker compose down",
+    "dev:logs": "docker compose logs -f",
+    "dev:clean": "docker compose down -v --remove-orphans",
+    "install:all": "npm run install:auth && npm run install:marketplace && npm run install:transaction && npm run install:gateway && npm run install:web",
+    "install:auth": "cd services/auth-service && npm install",
+    "install:marketplace": "cd services/marketplace-service && npm install",
+    "install:transaction": "cd services/transaction-service && npm install",
+    "install:gateway": "cd services/api-gateway && npm install",
+    "install:web": "cd apps/web-client && npm install"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

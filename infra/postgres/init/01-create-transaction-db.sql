@@ -1,0 +1,1 @@
+CREATE DATABASE vividcraft_transactions;

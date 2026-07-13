@@ -1,0 +1,192 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: vividcraft-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-vividcraft}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-vividcraft_secret}
+      POSTGRES_DB: ${POSTGRES_DB:-vividcraft_auth}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./infra/postgres/init:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-vividcraft} -d ${POSTGRES_DB:-vividcraft_auth}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  mongodb:
+    image: mongo:7
+    container_name: vividcraft-mongodb
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME:-vividcraft}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD:-vividcraft_secret}
+      MONGO_INITDB_DATABASE: ${MONGO_DB:-vividcraft_marketplace}
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: vividcraft-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  auth-service:
+    build:
+      context: .
+      dockerfile: services/auth-service/Dockerfile.dev
+    container_name: vividcraft-auth-service
+    restart: unless-stopped
+    env_file:
+      - ./services/auth-service/.env.example
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-vividcraft}:${POSTGRES_PASSWORD:-vividcraft_secret}@postgres:5432/${POSTGRES_DB:-vividcraft_auth}?schema=public
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./services/auth-service:/app
+      - auth_node_modules:/app/node_modules
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  marketplace-service:
+    build:
+      context: .
+      dockerfile: services/marketplace-service/Dockerfile.dev
+    container_name: vividcraft-marketplace-service
+    restart: unless-stopped
+    env_file:
+      - ./services/marketplace-service/.env.example
+    environment:
+      MONGODB_URI: mongodb://${MONGO_INITDB_ROOT_USERNAME:-vividcraft}:${MONGO_INITDB_ROOT_PASSWORD:-vividcraft_secret}@mongodb:27017/${MONGO_DB:-vividcraft_marketplace}?authSource=admin
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      IMAGE_PROCESSOR_URL: http://image-processor:5000
+    ports:
+      - "3002:3002"
+    volumes:
+      - ./services/marketplace-service:/app
+      - marketplace_node_modules:/app/node_modules
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      image-processor:
+        condition: service_started
+
+  image-processor:
+    build:
+      context: .
+      dockerfile: services/image-processor/Dockerfile.dev
+    container_name: vividcraft-image-processor
+    restart: unless-stopped
+    env_file:
+      - ./services/image-processor/.env.example
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./services/image-processor:/app
+      - image_processor_output:/app/output
+
+  transaction-service:
+    build:
+      context: .
+      dockerfile: services/transaction-service/Dockerfile.dev
+    container_name: vividcraft-transaction-service
+    restart: unless-stopped
+    env_file:
+      - ./services/transaction-service/.env.example
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-vividcraft}:${POSTGRES_PASSWORD:-vividcraft_secret}@postgres:5432/${POSTGRES_TRANSACTION_DB:-vividcraft_transactions}?schema=public
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    ports:
+      - "3003:3003"
+    volumes:
+      - ./services/transaction-service:/app
+      - transaction_node_modules:/app/node_modules
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  api-gateway:
+    build:
+      context: .
+      dockerfile: services/api-gateway/Dockerfile.dev
+    container_name: vividcraft-api-gateway
+    restart: unless-stopped
+    env_file:
+      - ./services/api-gateway/.env.example
+    environment:
+      AUTH_SERVICE_URL: http://auth-service:3001
+      MARKETPLACE_SERVICE_URL: http://marketplace-service:3002
+      TRANSACTION_SERVICE_URL: http://transaction-service:3003
+      IMAGE_PROCESSOR_URL: http://image-processor:5000
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./services/api-gateway:/app
+      - gateway_node_modules:/app/node_modules
+    depends_on:
+      - auth-service
+      - marketplace-service
+      - transaction-service
+      - image-processor
+
+  web-client:
+    build:
+      context: .
+      dockerfile: apps/web-client/Dockerfile.dev
+    container_name: vividcraft-web-client
+    restart: unless-stopped
+    env_file:
+      - ./apps/web-client/.env.example
+    environment:
+      VITE_API_URL: http://localhost:3000
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./apps/web-client:/app
+      - web_node_modules:/app/node_modules
+    depends_on:
+      - api-gateway
+
+volumes:
+  postgres_data:
+  mongodb_data:
+  redis_data:
+  auth_node_modules:
+  marketplace_node_modules:
+  transaction_node_modules:
+  gateway_node_modules:
+  web_node_modules:
+  image_processor_output:

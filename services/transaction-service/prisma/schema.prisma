@@ -1,0 +1,77 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum OrderStatus {
+  PENDING
+  PROCESSING
+  PAID
+  FAILED
+  REFUNDED
+}
+
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
+}
+
+model Order {
+  id          String      @id @default(uuid())
+  userId      String
+  userEmail   String
+  status      OrderStatus @default(PENDING)
+  totalAmount Decimal     @db.Decimal(10, 2)
+  invoiceNo   String      @unique
+  items       OrderItem[]
+  payment     Payment?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@map("orders")
+}
+
+model OrderItem {
+  id          String  @id @default(uuid())
+  orderId     String
+  order       Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId   String
+  productName String
+  productType String
+  price       Decimal @db.Decimal(10, 2)
+  quantity    Int     @default(1)
+
+  @@unique([orderId, productId])
+  @@map("order_items")
+}
+
+model Payment {
+  id            String        @id @default(uuid())
+  orderId       String        @unique
+  order         Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  amount        Decimal       @db.Decimal(10, 2)
+  status        PaymentStatus @default(PENDING)
+  transactionId String        @unique
+  method        String        @default("SIMULATED")
+  processedAt   DateTime?
+  createdAt     DateTime      @default(now())
+
+  @@map("payments")
+}
+
+model PurchaseLock {
+  id        String   @id @default(uuid())
+  userId    String
+  productId String
+  orderId   String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@unique([userId, productId])
+  @@map("purchase_locks")
+}
