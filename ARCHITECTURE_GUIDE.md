@@ -8,7 +8,7 @@
   * API Gateway: Reverse proxy routing frontend traffic to internal microservices with rate limiting.
   * Swagger OpenAPI specs auto-generated at `/api/docs` on the gateway level.
 * **Polyglot Microservices Ecosystem:**
-  * `auth-service` (NestJS + Prisma + PostgreSQL): Handles OAuth2.0, JWT, and RBAC. Docker setup includes automated `prisma generate` on startup.
+  * `auth-service` (NestJS + Prisma + PostgreSQL): Handles email/password login, JWT, and RBAC. Docker setup includes automated `prisma generate` on startup.
   * `marketplace-service` (NestJS + Mongoose + MongoDB): Manages digital art, comics, asset listings, and catalog search.
   * `image-processor` (Python Flask + Pillow): Lightweight sidecar service for automated watermarking and image optimization for art previews.
   * `transaction-service` (NestJS + Prisma + PostgreSQL): Processes payments and handles secure digital downloads via BullMQ.

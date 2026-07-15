@@ -1,0 +1,248 @@
+{
+  "_meta": {
+    "brand": "VividCraft",
+    "version": "1.0",
+    "date": "2026-07-15",
+    "description": "Brand tokens for VividCraft — digital comic, art, and asset marketplace.",
+    "usage": "Prefix prompt with: 'Apply VividCraft brand using these tokens:' then paste this file.",
+    "design_references": [
+      "https://www.webtoons.com/",
+      "https://tapas.io/menu/2/subtab/7",
+      "https://globalcomix.com/"
+    ]
+  },
+
+  "identity": {
+    "name": "VividCraft",
+    "spelling": "Always: VividCraft. Never: vividcraft / VIVIDCRAFT (logo lockup only ok).",
+    "tagline": "Stories you crave. Art you collect.",
+    "type": "Digital Comic & Art Marketplace",
+    "personality": ["Immersive", "Creator-first", "Vivid", "Trustworthy", "Modern"]
+  },
+
+  "colours": {
+    "_rule": "Proportions: 50% dark neutrals / 35% violet primary / 15% teal accent",
+    "primary":    { "hex": "#321E48", "rgb": "50,30,72",   "use": "Nav, hero, primary buttons, headings on light" },
+    "secondary":  { "hex": "#43637E", "rgb": "67,99,126",  "use": "Secondary buttons, borders, metadata, genre chips" },
+    "accent":     { "hex": "#65DCD5", "rgb": "101,220,213","use": "CTA fills, links & active states ON DARK, badges — 15% max. Fails as text on light." },
+    "accent_deep":{ "hex": "#1E8E86", "rgb": "30,142,134", "use": "Accent TEXT on light backgrounds (WCAG AA). Use instead of bright teal on light." },
+    "highlight":  { "hex": "#D9FFF4", "rgb": "217,255,244","use": "Soft tint backgrounds, hover washes, prices on dark covers" },
+    "ink":        { "hex": "#17131F", "rgb": "23,19,31",   "use": "Dark page background (refined, desaturated)" },
+    "surface":    { "hex": "#211B2C", "rgb": "33,27,44",   "use": "Dark cards, panels, elevated surfaces" },
+    "surface_hi": { "hex": "#2A2236", "rgb": "42,34,54",   "use": "Dark hover cards, modals, dropdowns" },
+    "nav":        { "hex": "#2A1A3D", "rgb": "42,26,61",   "use": "Nav bar — always this violet in both themes" },
+    "mist":       { "hex": "#9A93A6", "rgb": "154,147,166","use": "Secondary text on dark" },
+    "slate_muted":{ "hex": "#6B7B85", "rgb": "107,123,133","use": "Secondary text on light" },
+    "offwhite":   { "hex": "#F4F8F7", "rgb": "244,248,247","use": "Light mode page background" },
+    "white":      { "hex": "#FFFFFF", "use": "Text on dark, light mode cards" },
+    "border":     { "hex": "rgba(255,255,255,0.09)", "use": "Dark mode borders" },
+    "border_light": { "hex": "#E4EDEB", "use": "Light mode borders" },
+    "_no_gradients": "Solid fills only — no gradient colours anywhere. Depth comes from solid surfaces, borders, and shadows. Scrims over cover art use a solid semi-transparent panel (e.g. rgba(23,19,31,0.6)), not a gradient.",
+    "functional": {
+      "success": "#3DD68C",
+      "warning": "#F5B942",
+      "error":   "#F07178",
+      "info":    "#65DCD5",
+      "paid":    "#3DD68C",
+      "pending": "#F5B942",
+      "failed":  "#F07178"
+    },
+    "genre_chips": {
+      "romance":   { "bg": "rgba(240,127,177,0.15)", "text": "#F07FB1" },
+      "fantasy":   { "bg": "rgba(101,220,213,0.15)", "text": "#65DCD5" },
+      "action":    { "bg": "rgba(245,185,66,0.15)",  "text": "#F5B942" },
+      "drama":     { "bg": "rgba(139,163,173,0.15)", "text": "#8BA3AD" },
+      "comic":     { "bg": "rgba(101,220,213,0.12)", "text": "#65DCD5" },
+      "art":       { "bg": "rgba(217,255,244,0.12)", "text": "#D9FFF4" },
+      "asset":     { "bg": "rgba(245,185,66,0.12)",  "text": "#F5B942" }
+    }
+  },
+
+  "logo": {
+    "concept": "V mark — angular brush stroke forming a V, solid teal on violet tile. Wordmark: Vivid in white, Craft in teal.",
+    "configurations": {
+      "full":      "V mark + VividCraft wordmark",
+      "signature": "V mark only — favicon, app icon, compact nav"
+    },
+    "clear_space": "1x = height of V mark. All sides minimum.",
+    "min_size": {
+      "digital_full": "120px wide",
+      "digital_signature": "28px",
+      "favicon": "32px on #321E48 square"
+    },
+    "never": [
+      "Stretch, rotate, or recolour outside approved palette",
+      "Place on busy artwork without scrim",
+      "Use accent teal as logo background"
+    ]
+  },
+
+  "typography": {
+    "display_heading": { "family": "Sora", "weights": [600, 700, 800], "source": "Google Fonts" },
+    "body_ui":         { "family": "Plus Jakarta Sans", "weights": [400, 500, 600, 700], "source": "Google Fonts" },
+    "mono":            { "family": "JetBrains Mono", "weights": [400, 500], "source": "Google Fonts" },
+    "google_fonts_embed": "<link href=\"https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap\" rel=\"stylesheet\">",
+    "scale_digital": {
+      "display": { "px": 48, "family": "Sora", "weight": 800, "lh": 1.1, "ls": "-0.02em" },
+      "h1":      { "px": 36, "family": "Sora", "weight": 700, "lh": 1.15 },
+      "h2":      { "px": 28, "family": "Sora", "weight": 700, "lh": 1.2 },
+      "h3":      { "px": 22, "family": "Plus Jakarta Sans", "weight": 600, "lh": 1.25 },
+      "h4":      { "px": 18, "family": "Plus Jakarta Sans", "weight": 600, "lh": 1.3 },
+      "body":    { "px": 16, "family": "Plus Jakarta Sans", "weight": 400, "lh": 1.6 },
+      "body_sm": { "px": 14, "family": "Plus Jakarta Sans", "weight": 400, "lh": 1.55 },
+      "label":   { "px": 13, "family": "Plus Jakarta Sans", "weight": 600, "lh": 1.2, "ls": "0.02em" },
+      "caption": { "px": 12, "family": "Plus Jakarta Sans", "weight": 500, "lh": 1.4 },
+      "overline":{ "px": 11, "family": "Plus Jakarta Sans", "weight": 700, "lh": 1.2, "ls": "0.08em", "transform": "uppercase" },
+      "price":   { "px": 18, "family": "JetBrains Mono", "weight": 500, "lh": 1.2 }
+    },
+    "colour_rules": {
+      "dark": {
+        "heading": "#FFFFFF",
+        "body": "#E9E7EE",
+        "secondary": "#9A93A6",
+        "accent": "#65DCD5",
+        "link": "#65DCD5",
+        "link_hover": "#D9FFF4"
+      },
+      "light": {
+        "heading": "#321E48",
+        "body": "#1E1A24",
+        "secondary": "#6B7B85",
+        "accent": "#1E8E86",
+        "link": "#1E8E86",
+        "link_hover": "#321E48"
+      }
+    }
+  },
+
+  "layout_patterns": {
+    "_inspired_by": "WEBTOON carousels, Tapas daily grid, GlobalComix catalog",
+    "product_card": {
+      "aspect_ratio": "3/4",
+      "radius": "12px",
+      "cover_overlay": "solid bottom scrim rgba(23,19,31,0.6), height ~42%",
+      "hover": "translateY(-4px) + glow shadow",
+      "badge_position": "top-left for rank/trending, top-right for type"
+    },
+    "genre_filter": {
+      "style": "horizontal scroll chip row",
+      "chip_radius": "999px",
+      "chip_padding": "8px 16px",
+      "active": "bg #65DCD5, text #1A1226",
+      "inactive": "bg rgba(67,99,126,0.25), text #D9FFF4"
+    },
+    "hero_banner": {
+      "min_height": "320px",
+      "overlay": "solid violet #2A1A3D or dark scrim",
+      "cta": "accent button on right/bottom"
+    },
+    "navbar": {
+      "height": "64px",
+      "bg": "rgba(26,18,38,0.85)",
+      "backdrop_blur": "12px",
+      "border_bottom": "1px solid rgba(101,220,213,0.12)"
+    }
+  },
+
+  "components": {
+    "button": {
+      "dark": {
+        "primary":   { "bg": "#65DCD5", "text": "#1A1226", "hover": "#D9FFF4", "radius": "10px", "padding": "10px 22px", "font": "Plus Jakarta Sans 600 14px" },
+        "secondary": { "bg": "transparent", "text": "#D9FFF4", "border": "1.5px solid rgba(101,220,213,0.35)", "hover_bg": "rgba(101,220,213,0.08)" },
+        "ghost":     { "bg": "transparent", "text": "#8BA3AD", "hover_text": "#D9FFF4" },
+        "violet":    { "bg": "#321E48", "text": "#FFFFFF", "border": "1px solid rgba(101,220,213,0.2)" }
+      },
+      "light": {
+        "primary":   { "bg": "#321E48", "text": "#FFFFFF", "hover": "#43637E" },
+        "secondary": { "bg": "#D9FFF4", "text": "#321E48", "border": "1.5px solid #C5E8E4" },
+        "accent":    { "bg": "#65DCD5", "text": "#1A1226" }
+      }
+    },
+    "card": {
+      "dark": {
+        "bg": "#251A35",
+        "border": "1px solid rgba(101,220,213,0.10)",
+        "radius": "16px",
+        "padding": "20px",
+        "shadow": "0 4px 24px rgba(0,0,0,0.35)",
+        "glass": "background rgba(37,26,53,0.75); backdrop-filter blur(16px)"
+      },
+      "light": {
+        "bg": "#FFFFFF",
+        "border": "1px solid #C5E8E4",
+        "shadow": "0 4px 20px rgba(50,30,72,0.08)"
+      }
+    },
+    "input": {
+      "dark": {
+        "bg": "rgba(255,255,255,0.06)",
+        "border": "1.5px solid rgba(101,220,213,0.15)",
+        "text": "#FFFFFF",
+        "placeholder": "rgba(139,163,173,0.8)",
+        "focus_border": "#65DCD5",
+        "focus_shadow": "0 0 0 3px rgba(101,220,213,0.2)",
+        "radius": "12px"
+      }
+    },
+    "badge": {
+      "radius": "6px",
+      "font": "Plus Jakarta Sans 700 11px uppercase",
+      "rank": { "bg": "#65DCD5", "text": "#1A1226", "shape": "circle 24px" },
+      "new":  { "bg": "#F07178", "text": "#FFFFFF" },
+      "type_comic": { "bg": "rgba(101,220,213,0.2)", "text": "#65DCD5" }
+    },
+    "toast": {
+      "position": "bottom-right 24px",
+      "dark": { "bg": "#2E2142", "border": "1px solid rgba(101,220,213,0.2)", "accent_bar": "4px #65DCD5" }
+    }
+  },
+
+  "spacing": {
+    "base": "8px",
+    "scale": [4, 8, 12, 16, 24, 32, 48, 64, 96, 128]
+  },
+
+  "radius": {
+    "sm": "6px", "md": "10px", "lg": "16px", "xl": "20px", "pill": "999px", "cover": "12px"
+  },
+
+  "shadow": {
+    "glow": "0 0 40px -8px rgba(101,220,213,0.45)",
+    "card": "0 4px 24px -4px rgba(0,0,0,0.45)",
+    "card_hover": "0 12px 40px -8px rgba(101,220,213,0.25)"
+  },
+
+  "iconography": {
+    "library": "Lucide Icons (MIT)",
+    "style": "Outline 1.5px stroke, 20px default",
+    "active": "#65DCD5",
+    "inactive": "#8BA3AD"
+  },
+
+  "css_variables": {
+    "dark_default": ":root, html[data-theme='dark'] { --vc-ink: #17131F; --vc-primary: #321E48; --vc-secondary: #43637E; --vc-accent: #65DCD5; --vc-highlight: #D9FFF4; --vc-surface: #211B2C; --vc-surface-hi: #2A2236; --vc-nav: #2A1A3D; --vc-text: #E9E7EE; --vc-text-muted: #9A93A6; --vc-border: rgba(255,255,255,0.09); --vc-shadow: 0 8px 28px rgba(0,0,0,0.45); }",
+    "light": "html[data-theme='light'] { --vc-page-bg: #F4F8F7; --vc-text: #1E1A24; --vc-text-heading: #321E48; --vc-text-muted: #6B7B85; --vc-accent: #1E8E86; --vc-card-bg: #FFFFFF; --vc-border: #E4EDEB; --vc-shadow: 0 2px 8px rgba(50,30,72,0.06); }"
+  },
+
+  "tailwind_mapping": {
+    "note": "Map to apps/web-client/tailwind.config.js when implementing. Refined desaturated neutrals.",
+    "vivid": {
+      "50": "#D9FFF4",
+      "100": "#B8F5ED",
+      "200": "#8EEDE4",
+      "300": "#65DCD5",
+      "400": "#1E8E86",
+      "500": "#43637E",
+      "600": "#321E48",
+      "700": "#2A1A3D",
+      "800": "#211B2C",
+      "900": "#17131F"
+    },
+    "surface": {
+      "DEFAULT": "#17131F",
+      "card": "#211B2C",
+      "elevated": "#2A2236",
+      "border": "rgba(255,255,255,0.09)"
+    }
+  }
+}
