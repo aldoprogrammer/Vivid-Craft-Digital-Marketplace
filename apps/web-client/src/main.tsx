@@ -5,6 +5,9 @@ import App from './App';
 import './index.css';
 import { syncCartWithAuth, useAuthStore } from './stores/authStore';
 import { useCartStore } from './stores/cartStore';
+import { applyTheme, useThemeStore } from './stores/themeStore';
+
+applyTheme(useThemeStore.getState().theme);
 
 const queryClient = new QueryClient({
   defaultOptions: {

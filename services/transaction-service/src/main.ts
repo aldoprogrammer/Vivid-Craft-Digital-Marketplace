@@ -2,9 +2,10 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
+import { registerWithConsul } from './consul/register';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, { rawBody: true });
 
   app.useGlobalPipes(
     new ValidationPipe({
@@ -22,14 +23,27 @@ async function bootstrap() {
     .setVersion('1.0.0')
     .addTag('Checkout', 'Digital goods checkout')
     .addTag('Orders', 'Order management')
+    .addTag('Purchases', 'Owned digital goods & downloads')
+    .addTag('Creator', 'Creator sales analytics')
+    .addTag('Reviews', 'Product reviews and replies')
+    .addTag('Profile', 'Public user profile data')
+    .addTag('Stripe', 'Stripe webhooks')
+    .addTag('Notifications', 'SSE real-time notifications')
+    .addBearerAuth()
     .build();
 
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('docs', app, document);
 
-  const port = process.env.PORT || 3003;
+  const port = Number(process.env.PORT || 3003);
   await app.listen(port, '0.0.0.0');
   console.log(`Transaction service running on port ${port}`);
+
+  await registerWithConsul({
+    name: 'transaction-service',
+    port,
+    healthPath: '/health',
+  });
 }
 
 bootstrap();

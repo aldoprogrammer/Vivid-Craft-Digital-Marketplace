@@ -31,8 +31,8 @@ export class TagsService {
       return JSON.parse(cached);
     }
 
-    const tags = await this.tagModel.find().sort({ usageCount: -1 }).lean();
+    const tags = await this.tagModel.find().sort({ usageCount: -1 });
     await this.redisService.set(cacheKey, JSON.stringify(tags), 600);
-    return tags as TagDocument[];
+    return tags;
   }
 }

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, Navigate } from 'react-router-dom';
 import * as Yup from 'yup';
 import { FormEngine } from '@/components/FormEngine';
@@ -7,7 +7,7 @@ import { EmptyState } from '@/components/EmptyState';
 import { useAuthStore } from '@/stores/authStore';
 import { useAuthHydrated } from '@/hooks/useAuthHydrated';
 import { useCartStore, selectCartItems, selectCartTotal } from '@/stores/cartStore';
-import { useCheckout } from '@/hooks/useApi';
+import { useCheckout, useOwnedProductIds } from '@/hooks/useApi';
 import { getApiErrorMessage } from '@/lib/errors';
 import { notify } from '@/lib/toast';
 
@@ -34,11 +34,23 @@ export function CartPage() {
   const clearCart = useCartStore((s) => s.clearCart);
   const checkoutMutation = useCheckout();
   const [orderResult, setOrderResult] = useState<Record<string, unknown> | null>(null);
+  const { data: ownedIds = [] } = useOwnedProductIds(user?.id);
+
+  useEffect(() => {
+    if (!ownedIds.length) return;
+    const owned = new Set(ownedIds);
+    const ownedInCart = items.filter((i) => owned.has(i.productId));
+    if (!ownedInCart.length) return;
+    for (const item of ownedInCart) {
+      removeItem(item.productId);
+    }
+    notify.error('Removed already-owned products from your cart');
+  }, [ownedIds, items, removeItem]);
 
   if (!hydrated) {
     return (
       <div className="flex justify-center py-20">
-        <div className="h-10 w-10 animate-spin rounded-full border-2 border-vivid-500 border-t-transparent" />
+        <div className="h-10 w-10 animate-spin rounded-full border-2 border-brand-accent border-t-transparent" />
       </div>
     );
   }
@@ -54,18 +66,18 @@ export function CartPage() {
           <div className="flex h-20 w-20 items-center justify-center rounded-full bg-green-500/15 border border-green-500/30 text-4xl mx-auto mb-6">
             ✓
           </div>
-          <h2 className="text-2xl font-bold text-white mb-2">Order Placed!</h2>
-          <p className="text-gray-400 mb-6">
+          <h2 className="text-2xl font-bold text-content mb-2">Order Placed!</h2>
+          <p className="text-mist mb-6">
             {STATUS_LABEL[orderResult.status as string] ?? 'Payment is being processed.'}
           </p>
           <div className="rounded-xl bg-surface-elevated border border-surface-border p-4 mb-6 text-left space-y-2">
             <div className="flex justify-between text-sm">
-              <span className="text-gray-500">Invoice</span>
-              <span className="text-white font-mono">{orderResult.invoiceNo as string}</span>
+              <span className="text-mist">Invoice</span>
+              <span className="text-content font-mono">{orderResult.invoiceNo as string}</span>
             </div>
             <div className="flex justify-between text-sm">
-              <span className="text-gray-500">Status</span>
-              <span className="text-vivid-400 font-medium">
+              <span className="text-mist">Status</span>
+              <span className="text-brand-accent-deep font-medium">
                 {STATUS_LABEL[orderResult.status as string] ?? (orderResult.status as string)}
               </span>
             </div>
@@ -115,15 +127,15 @@ export function CartPage() {
                 {TYPE_EMOJI[item.productType] ?? '📦'}
               </div>
               <div className="flex-1 min-w-0">
-                <h3 className="font-semibold text-white truncate">{item.productName}</h3>
-                <p className="text-sm text-gray-500">{item.productType}</p>
+                <h3 className="font-semibold text-content truncate">{item.productName}</h3>
+                <p className="text-sm text-mist">{item.productType}</p>
               </div>
               <div className="flex items-center gap-3 sm:gap-4">
                 <div className="flex items-center rounded-xl border border-surface-border bg-surface-elevated">
                   <button
                     type="button"
                     onClick={() => updateQuantity(item.productId, Math.max(1, item.quantity - 1))}
-                    className="px-3 py-2 text-gray-400 hover:text-white transition-colors"
+                    className="px-3 py-2 text-mist hover:text-content transition-colors"
                   >
                     −
                   </button>
@@ -131,12 +143,12 @@ export function CartPage() {
                   <button
                     type="button"
                     onClick={() => updateQuantity(item.productId, item.quantity + 1)}
-                    className="px-3 py-2 text-gray-400 hover:text-white transition-colors"
+                    className="px-3 py-2 text-mist hover:text-content transition-colors"
                   >
                     +
                   </button>
                 </div>
-                <span className="text-white font-bold w-20 text-right">
+                <span className="text-content font-bold w-20 text-right">
                   ${(item.price * item.quantity).toFixed(2)}
                 </span>
                 <button
@@ -153,18 +165,18 @@ export function CartPage() {
 
         <div className="lg:col-span-1">
           <div className="glass-panel p-6 sticky top-24">
-            <h2 className="text-lg font-semibold text-white mb-4">Order Summary</h2>
+            <h2 className="text-lg font-semibold text-content mb-4">Order Summary</h2>
             <div className="space-y-3 mb-6 pb-6 border-b border-surface-border">
               {items.map((item) => (
                 <div key={item.productId} className="flex justify-between text-sm">
-                  <span className="text-gray-400 truncate mr-2">{item.productName} ×{item.quantity}</span>
-                  <span className="text-gray-200 shrink-0">${(item.price * item.quantity).toFixed(2)}</span>
+                  <span className="text-mist truncate mr-2">{item.productName} ×{item.quantity}</span>
+                  <span className="text-content shrink-0">${(item.price * item.quantity).toFixed(2)}</span>
                 </div>
               ))}
             </div>
-            <div className="flex justify-between text-lg font-bold text-white mb-6">
+            <div className="flex justify-between text-lg font-bold text-content mb-6">
               <span>Total</span>
-              <span className="text-vivid-400">${total.toFixed(2)}</span>
+              <span className="text-brand-accent-deep">${total.toFixed(2)}</span>
             </div>
             <FormEngine
               initialValues={{ confirmEmail: user?.email || '' }}
@@ -176,9 +188,7 @@ export function CartPage() {
               onSubmit={async () => {
                 const toastId = notify.loading('Processing checkout...');
                 try {
-                  const result = await checkoutMutation.mutateAsync({
-                    userId: user!.id,
-                    userEmail: user!.email,
+                  const result = (await checkoutMutation.mutateAsync({
                     items: items.map((i) => ({
                       productId: i.productId,
                       productName: i.productName,
@@ -186,10 +196,15 @@ export function CartPage() {
                       price: i.price,
                       quantity: i.quantity,
                     })),
-                  });
+                  })) as Record<string, unknown>;
                   notify.dismiss(toastId);
-                  notify.success('Checkout started! Track status in My Orders.');
                   clearCart();
+                  if (typeof result.checkoutUrl === 'string' && result.checkoutUrl) {
+                    notify.success('Redirecting to Stripe Checkout…');
+                    window.location.href = result.checkoutUrl;
+                    return;
+                  }
+                  notify.success('Checkout started! Track status in My Orders.');
                   setOrderResult(result);
                 } catch (err) {
                   notify.dismiss(toastId);

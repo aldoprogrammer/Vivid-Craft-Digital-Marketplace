@@ -2,13 +2,16 @@ import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Job } from 'bullmq';
-import { OrderStatus, PaymentStatus } from '@prisma/client';
+import { OrderStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.module';
+import { EventPublisherService } from '../events/events.module';
+import { PaymentCompletionService } from '../payments/payment-completion.service';
 
 interface PaymentJobData {
   orderId: string;
   invoiceNo: string;
   totalAmount: number;
+  userId: string;
   userEmail: string;
 }
 
@@ -19,6 +22,8 @@ export class PaymentProcessor extends WorkerHost {
 
   constructor(
     private prisma: PrismaService,
+    private eventPublisher: EventPublisherService,
+    private completion: PaymentCompletionService,
     configService: ConfigService,
   ) {
     super();
@@ -29,83 +34,29 @@ export class PaymentProcessor extends WorkerHost {
   }
 
   async process(job: Job<PaymentJobData>): Promise<void> {
-    const { orderId, invoiceNo, userEmail } = job.data;
-    this.logger.log(`Processing payment for order ${orderId} (${invoiceNo})`);
+    const { orderId, invoiceNo, userId } = job.data;
+    this.logger.log(`Simulated payment processing for ${invoiceNo}`);
 
     await this.prisma.order.update({
       where: { id: orderId },
       data: { status: OrderStatus.PROCESSING },
     });
 
+    await this.eventPublisher.publish('order.status_changed', {
+      userId,
+      orderId,
+      invoiceNo,
+      status: OrderStatus.PROCESSING,
+    });
+
     await new Promise((resolve) => setTimeout(resolve, this.simulationDelay));
 
     const paymentSuccess = Math.random() > 0.05;
-
     if (paymentSuccess) {
-      await this.prisma.$transaction(async (tx) => {
-        await tx.order.update({
-          where: { id: orderId },
-          data: { status: OrderStatus.PAID },
-        });
-
-        await tx.payment.update({
-          where: { orderId },
-          data: {
-            status: PaymentStatus.COMPLETED,
-            processedAt: new Date(),
-          },
-        });
-
-        const order = await tx.order.findUnique({
-          where: { id: orderId },
-          include: { items: true },
-        });
-
-        if (order) {
-          for (const item of order.items) {
-            await tx.purchaseLock.deleteMany({
-              where: {
-                userId: order.userId,
-                productId: item.productId,
-              },
-            });
-          }
-        }
-      });
-
-      this.logger.log(
-        `Payment completed for ${invoiceNo}. Digital delivery queued for ${userEmail}`,
-      );
+      await this.completion.markPaid(orderId);
     } else {
-      await this.prisma.$transaction(async (tx) => {
-        await tx.order.update({
-          where: { id: orderId },
-          data: { status: OrderStatus.FAILED },
-        });
-
-        await tx.payment.update({
-          where: { orderId },
-          data: { status: PaymentStatus.FAILED },
-        });
-
-        const order = await tx.order.findUnique({
-          where: { id: orderId },
-          include: { items: true },
-        });
-
-        if (order) {
-          for (const item of order.items) {
-            await tx.purchaseLock.deleteMany({
-              where: {
-                userId: order.userId,
-                productId: item.productId,
-              },
-            });
-          }
-        }
-      });
-
-      this.logger.warn(`Payment failed for ${invoiceNo}`);
+      await this.completion.markFailed(orderId);
+      this.logger.warn(`Simulated payment failed for ${invoiceNo}`);
     }
   }
 }

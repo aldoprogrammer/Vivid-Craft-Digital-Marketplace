@@ -1,6 +1,12 @@
 import { useState } from 'react';
-import { useProducts } from '@/hooks/useApi';
+import {
+  useFavoriteProductIds,
+  useOwnedProductIds,
+  useProducts,
+  useToggleFavorite,
+} from '@/hooks/useApi';
 import { useCartStore } from '@/stores/cartStore';
+import { useAuthStore } from '@/stores/authStore';
 import { ProductCard, ProductCardSkeleton } from '@/components/ProductCard';
 import { EmptyState } from '@/components/EmptyState';
 import { notify } from '@/lib/toast';
@@ -23,6 +29,14 @@ export function MarketplacePage() {
   };
 
   const { data: products, isLoading, error } = useProducts(filters);
+  const { user, isAuthenticated } = useAuthStore();
+  const isFan = isAuthenticated && user?.role === 'FAN';
+  const { data: favoriteIds = [] } = useFavoriteProductIds(isFan);
+  const { data: ownedIds = [] } = useOwnedProductIds(
+    isAuthenticated && user?.role === 'FAN' ? user.id : undefined,
+  );
+  const ownedSet = new Set(ownedIds);
+  const toggleFavorite = useToggleFavorite();
   const addItem = useCartStore((s) => s.addItem);
 
   const handleSearch = (e: React.FormEvent) => {
@@ -36,6 +50,10 @@ export function MarketplacePage() {
     type: 'COMIC' | 'ART' | 'ASSET';
     price: number;
   }) => {
+    if (ownedSet.has(product._id)) {
+      notify.error('You already own this product');
+      return;
+    }
     addItem({
       productId: product._id,
       productName: product.title,
@@ -46,21 +64,42 @@ export function MarketplacePage() {
     notify.success(`"${product.title}" added to cart`);
   };
 
+  const handleFavorite = async (productId: string, title: string) => {
+    if (!isAuthenticated) {
+      notify.error('Sign in as a buyer to save favorites');
+      return;
+    }
+    if (!isFan) {
+      notify.error('Favorites are available to buyer accounts');
+      return;
+    }
+
+    try {
+      const result = await toggleFavorite.mutateAsync(productId);
+      notify.success(
+        result.favorited
+          ? `"${title}" added to favorites`
+          : `"${title}" removed from favorites`,
+      );
+    } catch {
+      notify.error('Could not update favorite');
+    }
+  };
+
   return (
     <div>
-      <section className="relative mb-10 overflow-hidden rounded-3xl border border-surface-border bg-gradient-to-br from-vivid-900/40 via-surface-card to-violet-900/20 p-8 sm:p-12 animate-fade-in">
-        <div className="absolute top-0 right-0 w-64 h-64 bg-vivid-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
+      <section className="on-solid relative mb-10 overflow-hidden rounded-3xl border border-white/10 bg-brand-primary p-8 sm:p-12 animate-fade-in">
         <div className="relative max-w-2xl">
-          <span className="badge bg-vivid-500/20 text-vivid-300 border border-vivid-500/30 mb-4">
+          <span className="badge bg-brand-accent/20 text-brand-accent border border-brand-accent/30 mb-4">
             Digital Marketplace
           </span>
           <h1 className="text-4xl sm:text-5xl font-bold text-white tracking-tight leading-tight mb-4">
             Discover art & comics from{' '}
-            <span className="bg-gradient-to-r from-vivid-400 to-violet-400 bg-clip-text text-transparent">
+            <span className="text-brand-highlight">
               creators worldwide
             </span>
           </h1>
-          <p className="text-gray-400 text-lg leading-relaxed">
+          <p className="text-white/70 text-lg leading-relaxed">
             All preview images are protected with VividCraft watermarks via our Flask image processor.
           </p>
         </div>
@@ -110,13 +149,15 @@ export function MarketplacePage() {
 
       {!isLoading && !error && products && products.length > 0 && (
         <>
-          <p className="text-sm text-gray-400 mb-6">
-            <span className="text-white font-semibold">{products.length}</span> result{products.length !== 1 ? 's' : ''}
+          <p className="text-sm text-mist mb-6">
+            <span className="text-content font-semibold">{products.length}</span> result{products.length !== 1 ? 's' : ''}
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {products.map((product, index) => (
               <ProductCard
                 key={product._id}
+                productId={product._id}
+                creatorId={product.creatorId}
                 title={product.title}
                 description={product.description}
                 type={product.type}
@@ -125,6 +166,11 @@ export function MarketplacePage() {
                 previewImageUrl={product.previewImageUrl}
                 index={index}
                 onAddToCart={() => handleAddToCart(product)}
+                onFavorite={() => handleFavorite(product._id, product.title)}
+                isFavorite={favoriteIds.includes(product._id)}
+                favoriteCount={product.favoriteCount ?? 0}
+                favoritePending={toggleFavorite.isPending}
+                alreadyOwned={ownedSet.has(product._id)}
               />
             ))}
           </div>

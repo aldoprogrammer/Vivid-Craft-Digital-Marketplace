@@ -31,8 +31,8 @@ export class CategoriesService {
       return JSON.parse(cached);
     }
 
-    const categories = await this.categoryModel.find({ isActive: true }).lean();
+    const categories = await this.categoryModel.find({ isActive: true });
     await this.redisService.set(cacheKey, JSON.stringify(categories), 600);
-    return categories as CategoryDocument[];
+    return categories;
   }
 }

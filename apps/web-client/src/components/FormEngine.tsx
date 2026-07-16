@@ -34,7 +34,7 @@ export function FormEngine<T extends FormikValues>({
         <Form className="space-y-5">
           {fields.map((field) => (
             <div key={field.name}>
-              <label htmlFor={field.name} className="block text-sm font-medium text-gray-300 mb-1.5">
+              <label htmlFor={field.name} className="block text-sm font-medium text-content mb-1.5">
                 {field.label}
               </label>
               {field.type === 'textarea' ? (
@@ -76,7 +76,7 @@ export function FormEngine<T extends FormikValues>({
                 />
               )}
               {field.hint && !errors[field.name] && (
-                <p className="mt-1.5 text-xs text-gray-500">{field.hint}</p>
+                <p className="mt-1.5 text-xs text-mist">{field.hint}</p>
               )}
               {touched[field.name] && errors[field.name] && (
                 <p className="mt-1.5 text-sm text-red-400">{errors[field.name] as string}</p>

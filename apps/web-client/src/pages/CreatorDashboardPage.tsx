@@ -1,116 +1,82 @@
 import { useState } from 'react';
 import { Navigate } from 'react-router-dom';
-import * as Yup from 'yup';
-import { FormEngine } from '@/components/FormEngine';
-import { ImageUploadField } from '@/components/ImageUploadField';
 import { PageHeader } from '@/components/PageHeader';
 import { useAuthStore } from '@/stores/authStore';
-import { useCreateProduct, useWatermarkProduct } from '@/hooks/useApi';
-import { notify } from '@/lib/toast';
+import { useCreatorAnalytics, useMyProducts } from '@/hooks/useApi';
+import { CreatorOverview } from '@/components/creator/CreatorOverview';
+import { CreatorListings } from '@/components/creator/CreatorListings';
+import { CreatorCreateForm } from '@/components/creator/CreatorCreateForm';
 
-const listingSchema = Yup.object({
-  title: Yup.string().required('Title is required'),
-  description: Yup.string().required('Description is required'),
-  type: Yup.string().oneOf(['COMIC', 'ART', 'ASSET']).required('Type is required'),
-  price: Yup.number().min(0, 'Price must be positive').required('Price is required'),
-  categories: Yup.string().required('At least one category'),
-  tags: Yup.string(),
-});
+type Tab = 'overview' | 'listings' | 'create';
+
+const TABS: { id: Tab; label: string }[] = [
+  { id: 'overview', label: 'Overview' },
+  { id: 'listings', label: 'My Listings' },
+  { id: 'create', label: 'Create New' },
+];
 
 export function CreatorDashboardPage() {
   const { user, isAuthenticated } = useAuthStore();
-  const createProduct = useCreateProduct();
-  const watermarkProduct = useWatermarkProduct();
-  const [previewFile, setPreviewFile] = useState<File | null>(null);
+  const [tab, setTab] = useState<Tab>('overview');
+  const isCreator = isAuthenticated && user?.role === 'CREATOR';
+
+  const { data: products = [], isLoading: productsLoading } = useMyProducts(isCreator);
+  const { data: analytics, isLoading: analyticsLoading } = useCreatorAnalytics(isCreator);
 
   if (!isAuthenticated || user?.role !== 'CREATOR') {
     return <Navigate to="/login" replace />;
   }
 
   return (
-    <div className="max-w-2xl mx-auto animate-fade-in">
+    <div className="max-w-6xl mx-auto animate-fade-in">
       <PageHeader
         title="Creator Dashboard"
-        subtitle="Publish listings with automatic VividCraft watermark protection on preview images."
+        subtitle="Track performance, manage listings, and publish new work."
+        action={
+          <div className="flex items-center gap-3 rounded-xl border border-surface-border bg-surface-elevated/50 px-3 py-2">
+            <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-primary/40 text-sm font-bold text-brand-accent">
+              {user.name.charAt(0).toUpperCase()}
+            </span>
+            <div>
+              <p className="text-sm font-medium text-content">{user.name}</p>
+              <p className="text-xs text-mist">Creator</p>
+            </div>
+          </div>
+        }
       />
 
-      <div className="glass-panel p-6 sm:p-8">
-        <div className="flex items-center gap-3 mb-6 pb-6 border-b border-surface-border">
-          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-vivid-600/20 text-vivid-300 font-bold">
-            {user?.name?.charAt(0).toUpperCase()}
-          </span>
-          <div>
-            <p className="font-medium text-white">{user?.name}</p>
-            <p className="text-xs text-gray-500">Creator account</p>
-          </div>
-        </div>
-
-        <div className="mb-6">
-          <ImageUploadField file={previewFile} onChange={setPreviewFile} />
-        </div>
-
-        <FormEngine
-          initialValues={{
-            title: '',
-            description: '',
-            type: 'COMIC',
-            price: 0,
-            categories: '',
-            tags: '',
-          }}
-          validationSchema={listingSchema}
-          fields={[
-            { name: 'title', label: 'Title', placeholder: 'Neon Dreams Vol. 1' },
-            { name: 'description', label: 'Description', type: 'textarea', placeholder: 'Tell buyers what makes your work special...' },
-            {
-              name: 'type',
-              label: 'Product Type',
-              type: 'select',
-              options: [
-                { value: 'COMIC', label: 'Comic / Graphic Novel' },
-                { value: 'ART', label: 'Digital Art' },
-                { value: 'ASSET', label: 'Asset Pack' },
-              ],
-            },
-            { name: 'price', label: 'Price (USD)', type: 'number', placeholder: '9.99' },
-            { name: 'categories', label: 'Categories', placeholder: 'Comics, Sci-Fi', hint: 'Separate with commas' },
-            { name: 'tags', label: 'Tags (optional)', placeholder: 'cyberpunk, neon', hint: 'Helps fans discover your work' },
-          ]}
-          submitLabel={previewFile ? 'Publish & Watermark Preview' : 'Publish Listing'}
-          onSubmit={async (values, { resetForm }) => {
-            const toastId = notify.loading('Publishing listing...');
-            try {
-              const product = await createProduct.mutateAsync({
-                title: values.title,
-                description: values.description,
-                type: values.type,
-                price: Number(values.price),
-                creatorId: user!.id,
-                creatorName: user!.name,
-                categories: values.categories.split(',').map((c: string) => c.trim()).filter(Boolean),
-                tags: values.tags.split(',').map((t: string) => t.trim()).filter(Boolean),
-              });
-
-              if (previewFile) {
-                notify.dismiss(toastId);
-                const wmId = notify.loading('Applying VividCraft watermark...');
-                await watermarkProduct.mutateAsync({ productId: product._id, file: previewFile });
-                notify.dismiss(wmId);
-                notify.success('Listing live with watermarked preview!');
-              } else {
-                notify.dismiss(toastId);
-                notify.success('Listing published on the marketplace!');
-              }
-
-              resetForm();
-              setPreviewFile(null);
-            } catch {
-              notify.dismiss(toastId);
-              notify.error('Failed to publish listing. Please try again.');
-            }
-          }}
-        />
+      <div className="flex flex-wrap gap-2 mb-8 p-1 rounded-xl bg-surface-elevated border border-surface-border w-fit">
+        {TABS.map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            onClick={() => setTab(t.id)}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              tab === t.id
+                ? 'bg-brand-primary text-white'
+                : 'text-mist hover:text-content hover:bg-surface-card'
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
       </div>
+
+      {tab === 'overview' && (
+        <CreatorOverview
+          products={products}
+          analytics={analytics}
+          isLoading={productsLoading || analyticsLoading}
+        />
+      )}
+
+      {tab === 'listings' && (
+        <CreatorListings products={products} isLoading={productsLoading} />
+      )}
+
+      {tab === 'create' && (
+        <CreatorCreateForm onPublished={() => setTab('listings')} />
+      )}
     </div>
   );
 }

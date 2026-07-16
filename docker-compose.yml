@@ -50,6 +50,42 @@ services:
       timeout: 5s
       retries: 10
 
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: vividcraft-mailpit
+    restart: unless-stopped
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.15.3
+    container_name: vividcraft-elasticsearch
+    restart: unless-stopped
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+    ports:
+      - "9200:9200"
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:9200/_cluster/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+  consul:
+    image: hashicorp/consul:1.20
+    container_name: vividcraft-consul
+    restart: unless-stopped
+    command: agent -server -bootstrap-expect=1 -ui -client=0.0.0.0
+    ports:
+      - "8500:8500"
+    volumes:
+      - consul_data:/consul/data
+
   auth-service:
     build:
       context: .
@@ -62,6 +98,10 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER:-vividcraft}:${POSTGRES_PASSWORD:-vividcraft_secret}@postgres:5432/${POSTGRES_DB:-vividcraft_auth}?schema=public
       REDIS_HOST: redis
       REDIS_PORT: 6379
+      JWT_SECRET: ${JWT_SECRET:-change-this-to-a-secure-random-secret-in-production}
+      IMAGE_PROCESSOR_URL: http://image-processor:5000
+      CONSUL_HOST: consul
+      SERVICE_ADDRESS: auth-service
     ports:
       - "3001:3001"
     volumes:
@@ -72,6 +112,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      consul:
+        condition: service_started
 
   marketplace-service:
     build:
@@ -86,6 +128,10 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: 6379
       IMAGE_PROCESSOR_URL: http://image-processor:5000
+      JWT_SECRET: ${JWT_SECRET:-change-this-to-a-secure-random-secret-in-production}
+      ELASTICSEARCH_URL: http://elasticsearch:9200
+      CONSUL_HOST: consul
+      SERVICE_ADDRESS: marketplace-service
     ports:
       - "3002:3002"
     volumes:
@@ -97,6 +143,10 @@ services:
       redis:
         condition: service_healthy
       image-processor:
+        condition: service_started
+      elasticsearch:
+        condition: service_started
+      consul:
         condition: service_started
 
   image-processor:
@@ -125,6 +175,19 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER:-vividcraft}:${POSTGRES_PASSWORD:-vividcraft_secret}@postgres:5432/${POSTGRES_TRANSACTION_DB:-vividcraft_transactions}?schema=public
       REDIS_HOST: redis
       REDIS_PORT: 6379
+      JWT_SECRET: ${JWT_SECRET:-change-this-to-a-secure-random-secret-in-production}
+      MARKETPLACE_SERVICE_URL: http://marketplace-service:3002
+      SMTP_HOST: mailpit
+      SMTP_PORT: 1025
+      SMTP_FROM: noreply@vividcraft.local
+      PUBLIC_API_URL: http://api-gateway:3000
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+      STRIPE_CURRENCY: ${STRIPE_CURRENCY:-usd}
+      STRIPE_SUCCESS_URL: ${STRIPE_SUCCESS_URL:-http://localhost:5173/orders?paid=1}
+      STRIPE_CANCEL_URL: ${STRIPE_CANCEL_URL:-http://localhost:5173/cart?cancelled=1}
+      CONSUL_HOST: consul
+      SERVICE_ADDRESS: transaction-service
     ports:
       - "3003:3003"
     volumes:
@@ -135,6 +198,10 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      mailpit:
+        condition: service_started
+      consul:
+        condition: service_started
 
   api-gateway:
     build:
@@ -151,6 +218,8 @@ services:
       IMAGE_PROCESSOR_URL: http://image-processor:5000
       REDIS_HOST: redis
       REDIS_PORT: 6379
+      CONSUL_HOST: consul
+      SERVICE_ADDRESS: api-gateway
     ports:
       - "3000:3000"
     volumes:
@@ -161,6 +230,7 @@ services:
       - marketplace-service
       - transaction-service
       - image-processor
+      - consul
 
   web-client:
     build:
@@ -184,6 +254,8 @@ volumes:
   postgres_data:
   mongodb_data:
   redis_data:
+  elasticsearch_data:
+  consul_data:
   auth_node_modules:
   marketplace_node_modules:
   transaction_node_modules:

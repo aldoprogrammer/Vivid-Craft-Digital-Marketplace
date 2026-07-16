@@ -15,6 +15,9 @@ Digital art & comic marketplace built as microservices. Creators list comics, ar
 | PostgreSQL | User & payment data | 5432 |
 | MongoDB | Product catalog | 27017 |
 | Redis | Cache & job queue | 6379 |
+| Mailpit | Dev SMTP inbox | 8025 / 1025 |
+| Elasticsearch | Product full-text search | 9200 |
+| Consul | Service registry | 8500 |
 
 ## Requirements
 
@@ -30,9 +33,14 @@ Digital art & comic marketplace built as microservices. Creators list comics, ar
 | Image watermark | `image-processor` (Flask) → `marketplace-service` | Creator Dashboard image upload |
 | Checkout & payments | `transaction-service` + BullMQ | Cart checkout |
 | Order history | `transaction-service` | My Orders page |
+| Notifications (SSE + inbox) | `transaction-service` | Navbar bell dropdown |
 | API routing | `api-gateway` | All requests via `VITE_API_URL` |
 
-**Watermark flow:** Creator uploads image → marketplace sends to Flask `/watermark` → saved image served at `/api/images/files/{filename}` → displayed on product cards.
+**Watermark flow:** Creator uploads preview → marketplace sends to Flask `/watermark` → watermarked image at `/api/images/files/{filename}` → shown on product cards. Purchased asset (zip/pdf) is uploaded separately without watermark.
+
+**Notification flow:** Domain events → Redis Pub/Sub → transaction-service persists + SSE push → Navbar bell (unread badge, mark read, click to navigate). No HTTP polling.
+
+**Rate limiting:** Gateway skips SSE stream from the limiter. Dev default 2000 req/15min. Restart `api-gateway` after changing `RATE_LIMIT_*` env.
 
 ## Quick start
 
@@ -45,7 +53,7 @@ Digital art & comic marketplace built as microservices. Creators list comics, ar
    ```bash
    npm run dev
    ```
-   This builds images and starts all containers. The terminal stays open and shows logs — that is normal.
+   This already runs `--build` (rebuilds images if needed), then starts all containers. No extra flag required. The terminal stays open and shows logs — that is normal.
 
    **Or run in background** (terminal returns immediately):
    ```bash
@@ -58,6 +66,10 @@ Digital art & comic marketplace built as microservices. Creators list comics, ar
 4. **Open the app**
    - Website: http://localhost:5173
    - API health: http://localhost:3000/health
+   - Mailpit: http://localhost:8025
+   - Consul UI: http://localhost:8500
+   - Admin seed (after `npm run prisma:seed` in auth-service): `admin@vividcraft.local` / `AdminPass123!`
+   - Stripe (optional): set `STRIPE_SECRET_KEY` + `STRIPE_WEBHOOK_SECRET` in env; otherwise payments stay simulated
    - API docs: http://localhost:3000/api/docs
 
 ## Useful commands
@@ -66,8 +78,8 @@ Digital art & comic marketplace built as microservices. Creators list comics, ar
 
 | Command | What it does |
 |---------|----------------|
-| `npm run dev` | Start all services (foreground, shows logs) |
-| `npm run dev:detached` | Start all services in background |
+| `npm run dev` | Build images + start all services (foreground, shows logs). Same as `docker compose up --build`. |
+| `npm run dev:detached` | Build images + start all services in background. Same as `docker compose up --build -d`. |
 | `npm run dev:down` | Stop all containers |
 | `npm run dev:logs` | Follow logs (use after detached start) |
 | `npm run dev:clean` | Stop and remove volumes (fresh database) |
@@ -183,6 +195,13 @@ Get-ChildItem -Recurse -Filter "*.sh" | ForEach-Object {
 }
 ```
 
+### `429 Too many requests`
+Gateway rate limit hit. SSE reconnects used to count against the same bucket (now **SSE path is skipped**). Fix:
+```bash
+docker compose restart api-gateway
+```
+Wait ~15 min if the old window is still active, or set `RATE_LIMIT_MAX_REQUESTS=2000` (dev) in `services/api-gateway/.env.example`.
+
 ### Broken product images on marketplace
 API Gateway Helmet was blocking cross-origin images (`localhost:5173` → `localhost:3000`). Fixed via `crossOriginResourcePolicy: cross-origin`. If images still break after a code change:
 ```bash
@@ -196,5 +215,6 @@ Harmless. Docker health checks ping the databases every few seconds.
 ## Development notes
 
 - Source code is mounted into containers — edits reload automatically (hot reload).
-- Prisma services run `db push` and `generate` on startup so the database stays in sync.
+- Prisma services run `db push` and `generate` on startup so the database stays in sync (includes `notifications` table in transaction-service).
 - Auth API routes through the gateway as `/api/auth/*` (e.g. `/api/auth/register`, `/api/auth/login`).
+- `auth-service/tsconfig.json` compiles `src/` only; `prisma/seed.ts` runs via `npm run prisma:seed`, not Nest build.

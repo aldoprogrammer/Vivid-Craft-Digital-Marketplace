@@ -9,16 +9,32 @@ import { Prisma, OrderStatus } from '@prisma/client';
 import { v4 as uuidv4 } from 'uuid';
 import { PrismaService } from '../prisma/prisma.module';
 import { CheckoutDto } from './dto/checkout.dto';
+import { EventPublisherService } from '../events/events.module';
+import { MarketplaceClient } from '../marketplace/marketplace.client';
+import { StripeService } from '../stripe/stripe.service';
 
 @Injectable()
 export class CheckoutService {
   constructor(
     private prisma: PrismaService,
     @InjectQueue('payment-processing') private paymentQueue: Queue,
+    private eventPublisher: EventPublisherService,
+    private marketplaceClient: MarketplaceClient,
+    private stripeService: StripeService,
   ) {}
 
-  async processCheckout(dto: CheckoutDto) {
-    const totalAmount = dto.items.reduce(
+  async processCheckout(dto: CheckoutDto, userId: string, userEmail: string) {
+    const itemsWithCreator = await Promise.all(
+      dto.items.map(async (item) => {
+        const creatorId = await this.marketplaceClient.getProductCreatorId(item.productId);
+        if (!creatorId) {
+          throw new BadRequestException(`Product "${item.productName}" is not available`);
+        }
+        return { ...item, creatorId };
+      }),
+    );
+
+    const totalAmount = itemsWithCreator.reduce(
       (sum, item) => sum + item.price * item.quantity,
       0,
     );
@@ -28,15 +44,16 @@ export class CheckoutService {
     }
 
     const invoiceNo = `VC-${Date.now()}-${uuidv4().slice(0, 8).toUpperCase()}`;
+    const useStripe = this.stripeService.isEnabled();
 
     const order = await this.prisma.$transaction(
       async (tx) => {
-        for (const item of dto.items) {
+        for (const item of itemsWithCreator) {
           const existingPurchase = await tx.orderItem.findFirst({
             where: {
               productId: item.productId,
               order: {
-                userId: dto.userId,
+                userId: userId,
                 status: { in: [OrderStatus.PAID, OrderStatus.PROCESSING, OrderStatus.PENDING] },
               },
             },
@@ -51,7 +68,7 @@ export class CheckoutService {
           const activeLock = await tx.purchaseLock.findUnique({
             where: {
               userId_productId: {
-                userId: dto.userId,
+                userId: userId,
                 productId: item.productId,
               },
             },
@@ -66,16 +83,17 @@ export class CheckoutService {
 
         const createdOrder = await tx.order.create({
           data: {
-            userId: dto.userId,
-            userEmail: dto.userEmail,
+            userId: userId,
+            userEmail: userEmail,
             status: OrderStatus.PENDING,
             totalAmount: new Prisma.Decimal(totalAmount),
             invoiceNo,
             items: {
-              create: dto.items.map((item) => ({
+              create: itemsWithCreator.map((item) => ({
                 productId: item.productId,
                 productName: item.productName,
                 productType: item.productType,
+                creatorId: item.creatorId,
                 price: new Prisma.Decimal(item.price),
                 quantity: item.quantity,
               })),
@@ -87,16 +105,16 @@ export class CheckoutService {
         const lockExpiry = new Date();
         lockExpiry.setMinutes(lockExpiry.getMinutes() + 15);
 
-        for (const item of dto.items) {
+        for (const item of itemsWithCreator) {
           await tx.purchaseLock.upsert({
             where: {
               userId_productId: {
-                userId: dto.userId,
+                userId: userId,
                 productId: item.productId,
               },
             },
             create: {
-              userId: dto.userId,
+              userId,
               productId: item.productId,
               orderId: createdOrder.id,
               expiresAt: lockExpiry,
@@ -113,7 +131,7 @@ export class CheckoutService {
             orderId: createdOrder.id,
             amount: new Prisma.Decimal(totalAmount),
             transactionId: `TXN-${uuidv4()}`,
-            method: 'SIMULATED',
+            method: useStripe ? 'STRIPE' : 'SIMULATED',
           },
         });
 
@@ -126,13 +144,45 @@ export class CheckoutService {
       },
     );
 
+    await this.eventPublisher.publish('order.created', {
+      userId,
+      orderId: order.id,
+      invoiceNo: order.invoiceNo,
+      status: order.status,
+    });
+
+    if (useStripe) {
+      const session = await this.stripeService.createCheckoutSession({
+        orderId: order.id,
+        invoiceNo: order.invoiceNo,
+        amount: totalAmount,
+        userEmail,
+      });
+
+      await this.prisma.payment.update({
+        where: { orderId: order.id },
+        data: { stripeSessionId: session.id },
+      });
+
+      return {
+        orderId: order.id,
+        invoiceNo: order.invoiceNo,
+        status: order.status,
+        totalAmount,
+        checkoutUrl: session.url,
+        paymentMethod: 'STRIPE',
+        message: 'Redirect to Stripe Checkout to complete payment.',
+      };
+    }
+
     await this.paymentQueue.add(
       'process-payment',
       {
         orderId: order.id,
         invoiceNo: order.invoiceNo,
         totalAmount,
-        userEmail: dto.userEmail,
+        userId,
+        userEmail,
       },
       {
         attempts: 3,
@@ -145,6 +195,7 @@ export class CheckoutService {
       invoiceNo: order.invoiceNo,
       status: order.status,
       totalAmount,
+      paymentMethod: 'SIMULATED',
       message: 'Checkout initiated. Payment is being processed.',
     };
   }

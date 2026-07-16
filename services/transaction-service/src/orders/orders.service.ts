@@ -13,6 +13,14 @@ export class OrdersService {
     });
   }
 
+  async findAll() {
+    return this.prisma.order.findMany({
+      include: { items: true, payment: true },
+      orderBy: { createdAt: 'desc' },
+      take: 200,
+    });
+  }
+
   async findById(id: string) {
     const order = await this.prisma.order.findUnique({
       where: { id },

@@ -17,13 +17,13 @@ export function ImageUploadField({ file, onChange }: ImageUploadFieldProps) {
 
   return (
     <div>
-      <label className="block text-sm font-medium text-gray-300 mb-1.5">
+      <label className="block text-sm font-medium text-content mb-1.5">
         Preview Image
-        <span className="text-gray-500 font-normal ml-1">(auto watermarked via Flask processor)</span>
+        <span className="text-mist font-normal ml-1">(auto watermarked via Flask processor)</span>
       </label>
       <div
         onClick={() => inputRef.current?.click()}
-        className="relative cursor-pointer rounded-xl border-2 border-dashed border-surface-border bg-surface-elevated/50 hover:border-vivid-500/40 transition-colors overflow-hidden"
+        className="relative cursor-pointer rounded-xl border-2 border-dashed border-surface-border bg-surface-elevated/50 hover:border-brand-accent/40 transition-colors overflow-hidden"
       >
         {preview ? (
           <div className="relative h-48">
@@ -35,8 +35,8 @@ export function ImageUploadField({ file, onChange }: ImageUploadFieldProps) {
         ) : (
           <div className="flex flex-col items-center justify-center py-10 px-4 text-center">
             <span className="text-3xl mb-2">🖼️</span>
-            <p className="text-sm text-gray-300 font-medium">Upload preview artwork</p>
-            <p className="text-xs text-gray-500 mt-1">PNG, JPG up to 20MB — VividCraft watermark applied automatically</p>
+            <p className="text-sm text-content font-medium">Upload preview artwork</p>
+            <p className="text-xs text-mist mt-1">PNG, JPG up to 20MB — VividCraft watermark applied automatically</p>
           </div>
         )}
         <input

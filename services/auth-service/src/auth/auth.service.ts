@@ -2,9 +2,11 @@ import {
   Injectable,
   ConflictException,
   UnauthorizedException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
+import { Role } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../prisma/prisma.module';
 import { RegisterDto, LoginDto } from './dto/auth.dto';
@@ -18,6 +20,10 @@ export class AuthService {
   ) {}
 
   async register(dto: RegisterDto) {
+    if (dto.role === Role.ADMIN) {
+      throw new ForbiddenException('Cannot self-register as ADMIN');
+    }
+
     const existing = await this.prisma.user.findUnique({
       where: { email: dto.email },
     });
@@ -83,7 +89,7 @@ export class AuthService {
     role: string,
     name: string,
   ) {
-    const payload = { sub: userId, email, role };
+    const payload = { sub: userId, email, role, name };
 
     const accessToken = this.jwtService.sign(payload);
 

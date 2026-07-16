@@ -11,6 +11,8 @@ export interface CartItem {
   quantity: number;
 }
 
+const EMPTY_CART: CartItem[] = [];
+
 interface CartState {
   activeUserId: string | null;
   cartsByUser: Record<string, CartItem[]>;
@@ -37,7 +39,7 @@ function normalizeCartsByUser(
 
 export function selectCartItems(state: CartState): CartItem[] {
   const carts = normalizeCartsByUser(state.cartsByUser);
-  return carts[cartKey(state.activeUserId)] ?? [];
+  return carts[cartKey(state.activeUserId)] ?? EMPTY_CART;
 }
 
 export function selectCartItemCount(state: CartState): number {
@@ -69,7 +71,7 @@ export const useCartStore = create<CartState>()(
 
       getItems: () => {
         const { activeUserId, cartsByUser } = get();
-        return normalizeCartsByUser(cartsByUser)[cartKey(activeUserId)] ?? [];
+        return normalizeCartsByUser(cartsByUser)[cartKey(activeUserId)] ?? EMPTY_CART;
       },
 
       addItem: (item) =>

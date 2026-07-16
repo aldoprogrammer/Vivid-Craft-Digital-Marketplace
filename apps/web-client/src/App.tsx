@@ -7,6 +7,11 @@ import { RegisterPage } from '@/pages/RegisterPage';
 import { CreatorDashboardPage } from '@/pages/CreatorDashboardPage';
 import { CartPage } from '@/pages/CartPage';
 import { OrdersPage } from '@/pages/OrdersPage';
+import { LibraryPage } from '@/pages/LibraryPage';
+import { ProductReviewsPage } from '@/pages/ProductReviewsPage';
+import { ProfilePage } from '@/pages/ProfilePage';
+import { EditProfilePage } from '@/pages/EditProfilePage';
+import { AdminDashboardPage } from '@/pages/AdminDashboardPage';
 
 export default function App() {
   return (
@@ -20,11 +25,16 @@ export default function App() {
             <Route path="/login" element={<LoginPage />} />
             <Route path="/register" element={<RegisterPage />} />
             <Route path="/dashboard" element={<CreatorDashboardPage />} />
+            <Route path="/library" element={<LibraryPage />} />
+            <Route path="/products/:productId/reviews" element={<ProductReviewsPage />} />
+            <Route path="/users/:userId" element={<ProfilePage />} />
+            <Route path="/profile/edit" element={<EditProfilePage />} />
+            <Route path="/admin" element={<AdminDashboardPage />} />
             <Route path="/cart" element={<CartPage />} />
             <Route path="/orders" element={<OrdersPage />} />
           </Routes>
         </main>
-        <footer className="border-t border-surface-border/60 py-6 text-center text-sm text-gray-500">
+        <footer className="border-t border-surface-border py-6 text-center text-sm text-mist">
           © {new Date().getFullYear()} VividCraft — Digital Art & Comic Marketplace
         </footer>
       </div>

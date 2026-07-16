@@ -3,47 +3,75 @@
 @tailwind utilities;
 
 @layer base {
+  :root {
+    color-scheme: dark;
+    --vc-page: 23 19 31;
+    --vc-card: 33 27 44;
+    --vc-elevated: 42 34 54;
+    --vc-border: rgba(255, 255, 255, 0.09);
+    --vc-content: 255 255 255;
+    --vc-muted: 154 147 166;
+  }
+
+  html.light {
+    color-scheme: light;
+    --vc-page: 244 248 247;
+    --vc-card: 255 255 255;
+    --vc-elevated: 238 244 242;
+    --vc-border: #E4EDEB;
+    --vc-content: 23 19 31;
+    --vc-muted: 107 123 133;
+  }
+
+  /* Solid-coloured surfaces (nav, hero) keep light text in both themes */
+  .on-solid {
+    --vc-content: 255 255 255;
+    --vc-muted: 255 255 255;
+  }
+
   body {
-    @apply bg-surface text-gray-100 antialiased font-sans;
-    background-image:
-      radial-gradient(ellipse 80% 50% at 50% -20%, rgba(192, 38, 211, 0.15), transparent),
-      radial-gradient(ellipse 60% 40% at 100% 0%, rgba(124, 58, 237, 0.08), transparent);
+    @apply bg-ink text-content antialiased font-sans;
     min-height: 100vh;
+    transition: background-color 0.2s ease, color 0.2s ease;
+  }
+
+  h1, h2, h3, h4 {
+    @apply font-display;
   }
 
   ::selection {
-    @apply bg-vivid-600/40 text-white;
+    @apply bg-brand-primary/60 text-white;
   }
 }
 
 @layer components {
   .glass-panel {
-    @apply bg-surface-card/80 backdrop-blur-xl border border-surface-border rounded-2xl;
+    @apply bg-surface-card/90 backdrop-blur-xl border border-surface-border rounded-2xl;
   }
 
   .input-field {
-    @apply w-full rounded-xl bg-surface-elevated border border-surface-border px-4 py-3 text-white placeholder:text-gray-500
-      focus:outline-none focus:ring-2 focus:ring-vivid-500/50 focus:border-vivid-500/50 transition-all duration-200;
+    @apply w-full rounded-xl bg-surface-elevated border border-surface-border px-4 py-3 text-content placeholder:text-mist
+      focus:outline-none focus:ring-2 focus:ring-brand-accent/40 focus:border-brand-accent/40 transition-all duration-200;
   }
 
   .btn-primary {
-    @apply inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-vivid-600 to-violet-600
-      px-5 py-3 text-sm font-semibold text-white shadow-glow
-      hover:from-vivid-500 hover:to-violet-500 hover:scale-[1.02]
+    @apply inline-flex items-center justify-center gap-2 rounded-xl bg-brand-accent
+      px-5 py-3 text-sm font-semibold text-ink shadow-glow
+      hover:bg-brand-highlight hover:text-brand-primary hover:scale-[1.02]
       active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none disabled:scale-100
       transition-all duration-200;
   }
 
   .btn-secondary {
     @apply inline-flex items-center justify-center gap-2 rounded-xl border border-surface-border bg-surface-elevated
-      px-5 py-3 text-sm font-medium text-gray-200
-      hover:border-vivid-500/40 hover:bg-surface-card hover:text-white
+      px-5 py-3 text-sm font-medium text-content
+      hover:border-brand-accent/40 hover:bg-surface-card
       active:scale-[0.98] disabled:opacity-50 transition-all duration-200;
   }
 
   .btn-ghost {
-    @apply inline-flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-gray-400
-      hover:text-white hover:bg-white/5 transition-colors;
+    @apply inline-flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-mist
+      hover:text-content hover:bg-white/5 transition-colors;
   }
 
   .badge {

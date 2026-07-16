@@ -14,15 +14,22 @@ enum Role {
 }
 
 model User {
-  id        String   @id @default(uuid())
-  email     String   @unique
-  password  String
-  name      String
-  role      Role     @default(FAN)
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  tokens    Token[]
+  id         String   @id @default(uuid())
+  email      String   @unique
+  password   String
+  name       String
+  role       Role     @default(FAN)
+  bio        String?
+  avatarUrl  String?
+  bannerUrl  String?
+  website    String?
+  twitter    String?
+  instagram  String?
+  discord    String?
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  tokens     Token[]
 
   @@map("users")
 }

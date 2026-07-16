@@ -9,6 +9,27 @@ export interface User {
   email: string;
   name: string;
   role: UserRole;
+  bio?: string | null;
+  avatarUrl?: string | null;
+  bannerUrl?: string | null;
+  website?: string | null;
+  twitter?: string | null;
+  instagram?: string | null;
+  discord?: string | null;
+}
+
+export interface PublicUser {
+  id: string;
+  name: string;
+  role: UserRole;
+  bio?: string | null;
+  avatarUrl?: string | null;
+  bannerUrl?: string | null;
+  website?: string | null;
+  twitter?: string | null;
+  instagram?: string | null;
+  discord?: string | null;
+  createdAt?: string;
 }
 
 interface AuthState {
@@ -17,6 +38,8 @@ interface AuthState {
   refreshToken: string | null;
   isAuthenticated: boolean;
   setAuth: (user: User, accessToken: string, refreshToken: string) => void;
+  setTokens: (accessToken: string, refreshToken: string) => void;
+  updateUser: (user: Partial<User>) => void;
   logout: () => void;
 }
 
@@ -30,6 +53,14 @@ export const useAuthStore = create<AuthState>()(
       setAuth: (user, accessToken, refreshToken) => {
         useCartStore.getState().setActiveUser(user.id);
         set({ user, accessToken, refreshToken, isAuthenticated: true });
+      },
+      setTokens: (accessToken, refreshToken) => {
+        set({ accessToken, refreshToken, isAuthenticated: true });
+      },
+      updateUser: (patch) => {
+        set((state) => ({
+          user: state.user ? { ...state.user, ...patch } : null,
+        }));
       },
       logout: () => {
         useCartStore.getState().setActiveUser(null);

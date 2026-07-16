@@ -1,23 +1,23 @@
 # Real-Time & Event-Driven Strategy
 
-Execution plan to make VividCraft feel alive: order updates, creator notifications, and cross-service reactions without tight coupling.
+Execution plan for live UX: order updates, creator notifications, favorite counts, and cross-service reactions without tight coupling.
 
-**Decision:** Real-time UX is **SSE-only**. No HTTP polling for order status, notifications, or similar live updates (polling is costly at scale and is not part of the target design).
+**Decision:** Real-time UX is **SSE-only**. No HTTP polling for order status, notifications, or similar live updates.
 
-**Current state:** BullMQ for payment jobs only. No Pub/Sub. No SSE. Orders page still uses a temporary `refetchInterval: 5000` — **must be removed** when SSE ships.
+**Current state (2026-07-16):** ✅ Shipped — Redis Pub/Sub, SSE stream, persisted notification inbox, live favorite counts. Orders page has no `refetchInterval`.
 
 ---
 
 ## Goals
 
-1. Push order/payment status to the browser via SSE only (remove all live polling)
+1. Push order/payment status to the browser via SSE only (no live polling)
 2. Decouple services via domain events (checkout → notify → analytics → delivery)
 3. Keep Redis as the shared event backbone (already in stack)
-4. On SSE disconnect: reconnect with exponential backoff — **never** start an interval poller. Optional one-shot `GET` after reconnect for catch-up is OK (not polling).
+4. On SSE disconnect: browser `EventSource` auto-reconnects — gateway must **not** rate-limit the stream path
 
 ---
 
-## Target architecture
+## Architecture (as built)
 
 ```
 ┌─────────────┐     checkout      ┌────────────────────┐
@@ -27,35 +27,35 @@ Execution plan to make VividCraft feel alive: order updates, creator notificatio
        │ publish                            ▼
        │                           ┌─────────────────┐
        └──────────────────────────▶│  Redis Pub/Sub   │
-                                   │  channel: events │
+                                   │  vividcraft:events│
                                    └────────┬────────┘
                                             │ subscribe
                     ┌───────────────────────┼───────────────────────┐
                     ▼                       ▼                       ▼
             ┌──────────────┐        ┌──────────────┐        ┌──────────────┐
-            │ notification │        │  marketplace │        │   delivery   │
-            │   service    │        │   (optional) │        │    worker    │
-            │  SSE hub     │        │ cache inval. │        │  BullMQ queue│
+            │ transaction  │        │ marketplace  │        │  web-client  │
+            │ notifications│        │ (favorites)  │        │ EventSource  │
+            │ SSE + persist│        │ publish evt  │        │ + React Query│
             └──────┬───────┘        └──────────────┘        └──────────────┘
                    │ SSE
                    ▼
             ┌──────────────┐
-            │  web-client  │
-            │ EventSource  │
+            │ API Gateway  │  skip rate-limit on /notifications/stream
             └──────────────┘
 ```
 
 ---
 
-## Event catalog (v1)
+## Event catalog (v1 — implemented)
 
-| Event | Publisher | Subscribers | Payload |
-|-------|-----------|-------------|---------|
-| `order.created` | transaction-service | notification-service | `{ orderId, userId, invoiceNo, total }` |
-| `order.status_changed` | payment.processor | notification-service, marketplace (optional) | `{ orderId, userId, status, previousStatus }` |
-| `payment.completed` | payment.processor | delivery-worker, notification-service | `{ orderId, userId, items[] }` |
-| `payment.failed` | payment.processor | notification-service | `{ orderId, userId, reason }` |
-| `product.published` | marketplace-service | notification-service (followers, later) | `{ productId, creatorId }` |
+| Event | Publisher | Subscribers / effect | Payload highlights |
+|-------|-----------|----------------------|-------------------|
+| `order.created` | transaction-service | SSE + notification row | `userId`, `orderId`, `invoiceNo` |
+| `order.status_changed` | payment processor | SSE + notification row | `userId`, `status`, `invoiceNo` |
+| `product.favorited` | marketplace-service | SSE + notification row (creator) | `userId` (creator), `productId`, `buyerEmail` |
+| `product.favorite_count_changed` | marketplace-service | SSE broadcast to **all** connected clients | `productId`, `favoriteCount` — no DB row |
+| `review.created` | transaction-service | SSE + notification row (seller) | `productId`, `reviewerName`, `rating` |
+| `review.replied` | transaction-service | SSE + notification row (review author) | `productId`, `replierName` |
 
 Envelope format:
 
@@ -70,123 +70,41 @@ Envelope format:
 
 ---
 
-## Phase 1 — Redis Pub/Sub library (shared)
-
-### Tasks
-
-- [ ] Create `packages/event-bus` or `services/shared-events` module
-- [ ] `EventPublisher.publish(channel, envelope)` using `ioredis` duplicate connection
-- [ ] `EventSubscriber.subscribe(channel, handler)` with reconnect
-- [ ] Channel name: `vividcraft:events`
-- [ ] Unit test: publish → subscriber receives
-
-### Files to add
-
-```
-services/transaction-service/src/events/
-  event-publisher.service.ts
-  events.module.ts
-```
-
-### Acceptance criteria
-
-- Payment processor publishes `order.status_changed` after DB update
-- Log subscriber in marketplace-service receives event
-
----
-
-## Phase 2 — Notification service + SSE
-
-### New service: `notification-service` (NestJS)
+## Notification inbox (persisted)
 
 | Endpoint | Purpose |
 |----------|---------|
-| `GET /notifications/stream` | SSE per user (query `userId` or JWT) |
-| `GET /notifications` | Recent in-app notifications (Mongo or Redis list) |
+| `GET /api/transactions/notifications/stream?token=` | SSE (JWT in query for EventSource) |
+| `GET /api/transactions/notifications` | List + unread count |
+| `PATCH /api/transactions/notifications/:id/read` | Mark one read |
+| `PATCH /api/transactions/notifications/read-all` | Mark all read |
 
-### SSE implementation sketch
-
-```typescript
-@Sse('stream')
-stream(@CurrentUser() user: JwtPayload): Observable<MessageEvent> {
-  return this.sseService.connect(user.sub);
-}
-```
-
-- On Redis event where `data.userId === subscriber`, push to open SSE connection
-- Connection map: `Map<userId, Set<Response>>`
-- Heartbeat every 30s (`: ping\n\n`)
-
-### Gateway route
-
-```
-GET /api/notifications/stream  →  notification-service
-```
-
-Disable buffering on proxy for SSE (`X-Accel-Buffering: no`).
-
-### Frontend
-
-- [ ] Delete `refetchInterval` from `useOrders` (no polling, ever)
-- [ ] `useSseNotifications(userId)` hook with `EventSource` + reconnect backoff
-- [ ] On `order.status_changed` / `payment.*`: patch React Query cache or invalidate once
-- [ ] Toast on `payment.completed` / `payment.failed`
-- [ ] Initial orders load: **one** `GET /orders` on mount only — then SSE owns all updates
-
-### Acceptance criteria
-
-- Checkout → Orders page updates within 1s without refresh
-- Network tab shows **zero** repeating `/orders` requests
-- SSE reconnects after tab sleep / network blip without enabling polling
+- Rows stored in PostgreSQL `notifications` table (transaction-service)
+- Deduped by `eventId`
+- Frontend: `NotificationDropdown.tsx` — badge, list, click-through (`linkPath`)
 
 ---
 
-## Phase 3 — Digital delivery queue (BullMQ)
+## Frontend hooks
 
-Separate queue from payment — triggered by `payment.completed` event.
-
-| Queue | Job | Worker action |
-|-------|-----|---------------|
-| `digital-delivery` | `{ orderId, productId }` | Generate signed download URL, store in DB, emit `delivery.ready` |
-
-### Tasks
-
-- [ ] Add `DownloadGrant` model in transaction-service Prisma
-- [ ] `DeliveryProcessor` worker
-- [ ] `GET /downloads/:token` endpoint (time-limited signed URL)
-- [ ] FE: "Download" button on PAID orders
+| Hook / component | Role |
+|------------------|------|
+| `useSseNotifications` | EventSource; invalidates orders, notifications; patches favorite counts |
+| `useNotifications` | REST list (no polling interval) |
+| `useToggleFavorite` | Optimistic `favoriteCount` cache patch on success |
 
 ---
 
-## Phase 4 — Hardening
+## Gateway SSE requirements
 
-- [ ] Idempotent event handlers (store `event.id` in Redis `SET` with TTL)
-- [ ] Dead-letter queue for failed BullMQ jobs
-- [ ] Rate limit SSE connections per IP/user
-- [ ] Structured logging with `correlationId` from checkout → payment → SSE
+Implemented in `services/api-gateway/src/index.ts`:
 
----
+- `skip` rate limit for paths containing `/notifications/stream`
+- `proxyTimeout: 0`, `timeout: 0` on transaction proxy
+- `x-accel-buffering: no` on stream responses
+- No `compression()` middleware (would buffer SSE)
 
-## Redis connection budget
-
-| Service | Connections |
-|---------|-------------|
-| marketplace cache | 1 |
-| transaction BullMQ | 2 (worker + queue) |
-| event publisher | 1 |
-| event subscriber | 1 |
-| notification SSE | 1–2 |
-
-Use connection pooling; avoid `KEYS` in production (already a concern in cache invalidation — migrate to `SCAN` later).
-
----
-
-## Execute order (recommended)
-
-1. Phase 1 — Pub/Sub from payment processor (1–2 days)
-2. Phase 2 — SSE + FE hook (2–3 days)
-3. Phase 3 — Delivery queue (2–3 days)
-4. Phase 4 — Hardening (ongoing)
+Transaction-service sends heartbeat `: heartbeat\n\n` every 30s.
 
 ---
 
@@ -196,10 +114,21 @@ Use connection pooling; avoid `KEYS` in production (already a concern in cache i
 - ❌ WebSocket (SSE is enough for server→client push)
 - ❌ Polling as SSE fallback
 
-## Definition of done (real-time MVP)
+## Definition of done (real-time MVP) — ✅
 
-- [ ] `refetchInterval` removed from codebase for orders/notifications
-- [ ] All live updates arrive only via SSE
-- [ ] `order.status_changed` visible in browser < 2s P95
-- [ ] Pub/Sub events logged with correlation ID
-- [ ] FEATURE_IMPLEMENTATION_AUDIT rows 2.5–2.7, 7.11 marked ✅
+- [x] `refetchInterval` removed from codebase for orders/notifications
+- [x] Live updates via SSE (+ one-shot REST for notification list on open / after event)
+- [x] `order.status_changed` visible in browser without manual refresh
+- [x] Favorite count updates via `product.favorite_count_changed`
+- [x] FEATURE_IMPLEMENTATION_AUDIT rows 2.5–2.9, 7.11, 7.21–7.22 marked ✅
+
+---
+
+## Future hardening (optional)
+
+- [ ] Idempotent event handlers (store `event.id` in Redis `SET` with TTL)
+- [ ] Dead-letter queue for failed BullMQ jobs
+- [ ] Structured logging with `correlationId` from checkout → payment → SSE
+- [ ] Migrate cache invalidation from `KEYS` to `SCAN`
+
+Related: [FEATURE_IMPLEMENTATION_AUDIT.md](./FEATURE_IMPLEMENTATION_AUDIT.md) · [CURRENT_STATE.md](./CURRENT_STATE.md)

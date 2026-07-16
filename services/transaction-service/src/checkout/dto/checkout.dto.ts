@@ -1,7 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import {
   IsString,
-  IsEmail,
   IsArray,
   ValidateNested,
   IsNumber,
@@ -35,14 +34,6 @@ export class CheckoutItemDto {
 }
 
 export class CheckoutDto {
-  @ApiProperty({ example: 'user-uuid' })
-  @IsString()
-  userId!: string;
-
-  @ApiProperty({ example: 'fan@vividcraft.com' })
-  @IsEmail()
-  userEmail!: string;
-
   @ApiProperty({ type: [CheckoutItemDto] })
   @IsArray()
   @ArrayMinSize(1)

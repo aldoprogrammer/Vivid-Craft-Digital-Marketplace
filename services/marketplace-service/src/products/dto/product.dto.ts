@@ -28,13 +28,10 @@ export class CreateProductDto {
   @Min(0)
   price!: number;
 
-  @ApiProperty({ example: 'creator-uuid' })
+  @ApiPropertyOptional({ example: 'Jane Creator' })
+  @IsOptional()
   @IsString()
-  creatorId!: string;
-
-  @ApiProperty({ example: 'Jane Creator' })
-  @IsString()
-  creatorName!: string;
+  creatorName?: string;
 
   @ApiProperty({ example: ['Comics', 'Sci-Fi'] })
   @IsArray()

@@ -59,6 +59,37 @@ def health():
     })
 
 
+@app.route("/upload", methods=["POST"])
+def upload():
+  """Store a profile or banner image without watermark."""
+  prefix = request.headers.get("X-Upload-Prefix", "profile")
+  raw_data = request.get_data()
+
+  if not raw_data:
+    return jsonify({"error": "No image data provided"}), 400
+
+  if len(raw_data) > MAX_IMAGE_SIZE_BYTES:
+    return jsonify({"error": f"Image exceeds {MAX_IMAGE_SIZE_BYTES // (1024*1024)}MB limit"}), 413
+
+  try:
+    image = Image.open(BytesIO(raw_data))
+    image = image.convert("RGB")
+  except Exception:
+    return jsonify({"error": "Invalid image format"}), 400
+
+  filename = f"{prefix}_{uuid.uuid4().hex[:8]}.jpg"
+  file_path = os.path.join(OUTPUT_DIR, filename)
+  image.save(file_path, "JPEG", quality=88, optimize=True)
+
+  return jsonify({
+    "success": True,
+    "filePath": file_path,
+    "filename": filename,
+    "publicUrl": f"/api/images/files/{filename}",
+    "processedAt": datetime.now(timezone.utc).isoformat(),
+  }), 200
+
+
 @app.route("/watermark", methods=["POST"])
 def watermark():
     product_id = request.headers.get("X-Product-Id", "unknown")
@@ -91,13 +122,58 @@ def watermark():
     }), 200
 
 
+@app.route("/upload-asset", methods=["POST"])
+def upload_asset():
+    """Store a creator digital asset file (zip/pdf/image) without watermark."""
+    product_id = request.headers.get("X-Product-Id", "asset")
+    original_name = request.headers.get("X-Original-Filename", "file.bin")
+    content_type = request.headers.get("Content-Type", "application/octet-stream")
+    raw_data = request.get_data()
+
+    if not raw_data:
+        return jsonify({"error": "No file data provided"}), 400
+
+    if len(raw_data) > MAX_IMAGE_SIZE_BYTES * 5:
+        return jsonify({"error": "File exceeds size limit"}), 413
+
+    ext = os.path.splitext(original_name)[1] or ".bin"
+    safe_ext = "".join(c for c in ext if c.isalnum() or c == ".")[:12]
+    filename = f"asset_{product_id}_{uuid.uuid4().hex[:8]}{safe_ext}"
+    file_path = os.path.join(OUTPUT_DIR, filename)
+    with open(file_path, "wb") as f:
+        f.write(raw_data)
+
+    return jsonify({
+        "success": True,
+        "filePath": file_path,
+        "filename": filename,
+        "originalName": original_name,
+        "contentType": content_type,
+        "publicUrl": f"/api/images/files/{filename}",
+        "productId": product_id,
+        "processedAt": datetime.now(timezone.utc).isoformat(),
+    }), 200
+
+
 @app.route("/files/<path:filename>", methods=["GET"])
 def serve_file(filename: str):
     safe_name = os.path.basename(filename)
     file_path = os.path.join(OUTPUT_DIR, safe_name)
     if not os.path.isfile(file_path):
         return jsonify({"error": "File not found"}), 404
-    return send_from_directory(OUTPUT_DIR, safe_name, mimetype="image/jpeg")
+    mime = "application/octet-stream"
+    lower = safe_name.lower()
+    if lower.endswith((".jpg", ".jpeg")):
+        mime = "image/jpeg"
+    elif lower.endswith(".png"):
+        mime = "image/png"
+    elif lower.endswith(".webp"):
+        mime = "image/webp"
+    elif lower.endswith(".zip"):
+        mime = "application/zip"
+    elif lower.endswith(".pdf"):
+        mime = "application/pdf"
+    return send_from_directory(OUTPUT_DIR, safe_name, mimetype=mime)
 
 
 if __name__ == "__main__":

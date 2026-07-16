@@ -1,6 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { Role } from '@prisma/client';
-import { IsEmail, IsEnum, IsString, MinLength } from 'class-validator';
+import { IsEmail, IsIn, IsString, MinLength } from 'class-validator';
 
 export class RegisterDto {
   @ApiProperty({ example: 'creator@vividcraft.com' })
@@ -16,8 +16,8 @@ export class RegisterDto {
   @IsString()
   name!: string;
 
-  @ApiProperty({ enum: Role, example: Role.CREATOR })
-  @IsEnum(Role)
+  @ApiProperty({ enum: [Role.CREATOR, Role.FAN], example: Role.CREATOR })
+  @IsIn([Role.CREATOR, Role.FAN])
   role!: Role;
 }
 

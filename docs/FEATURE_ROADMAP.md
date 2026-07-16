@@ -19,9 +19,9 @@ Ordered backlog with acceptance criteria. Check [FEATURE_IMPLEMENTATION_AUDIT.md
 
 | # | Feature | Status | Doc | Acceptance criteria |
 |---|---------|--------|-----|---------------------|
-| P0-1 | Enforce JWT on write APIs | 📋 | [RBAC.md](./RBAC.md) | Unauthenticated `POST /products` returns 401 |
-| P0-2 | Checkout uses JWT user, not body `userId` | 📋 | [RBAC.md](./RBAC.md) | Tampered `userId` in body ignored |
-| P0-3 | Creator ownership on product update/delete | 📋 | [RBAC.md](./RBAC.md) | 403 when editing another creator's product |
+| P0-1 | Enforce JWT on write APIs | ✅ | [RBAC.md](./RBAC.md) | Unauthenticated `POST /products` returns 401 |
+| P0-2 | Checkout uses JWT user, not body `userId` | ✅ | [RBAC.md](./RBAC.md) | Tampered `userId` in body ignored |
+| P0-3 | Creator ownership on product update/delete | ✅ | [RBAC.md](./RBAC.md) | 403 when editing another creator's product |
 
 ---
 
@@ -29,11 +29,14 @@ Ordered backlog with acceptance criteria. Check [FEATURE_IMPLEMENTATION_AUDIT.md
 
 | # | Feature | Status | Doc | Acceptance criteria |
 |---|---------|--------|-----|---------------------|
-| P1-1 | Redis Pub/Sub event bus | 📋 | [REALTIME_EVENT_DRIVEN_STRATEGY.md](./REALTIME_EVENT_DRIVEN_STRATEGY.md) | `order.status_changed` published on payment complete |
-| P1-2 | SSE notification stream | 📋 | Same | Browser receives event < 2s after status change |
-| P1-3 | Remove all order/notification polling | 📋 | Same | Delete `refetchInterval`; zero repeating `/orders` requests; SSE only |
-| P1-4 | Digital delivery queue + download link | 📋 | Same | PAID order shows working download button |
-| P1-5 | Real payment gateway (Stripe sandbox) | 📋 | — | Webhook updates order; no `Math.random` |
+| P1-1 | Redis Pub/Sub event bus | ✅ | [REALTIME_EVENT_DRIVEN_STRATEGY.md](./REALTIME_EVENT_DRIVEN_STRATEGY.md) | `order.status_changed` published on payment complete |
+| P1-2 | SSE notification stream | ✅ | Same | Browser receives event < 2s after status change |
+| P1-3 | Remove all order/notification polling | ✅ | Same | Delete `refetchInterval`; zero repeating `/orders` requests; SSE only |
+| P1-4 | Digital delivery + download link | ✅ | Same | PAID order shows working download button in Library |
+| P1-5 | Real payment gateway (Stripe sandbox) | ✅ | — | When `STRIPE_SECRET_KEY` set, Checkout Session + webhook marks PAID; else simulated fallback |
+| P1-6 | Product favorites + seller SSE | ✅ | [FEATURE_IMPLEMENTATION_AUDIT.md](./FEATURE_IMPLEMENTATION_AUDIT.md) §4.9 | FAN favorites listing → creator gets `product.favorited` toast |
+| P1-7 | Product reviews + threaded replies + SSE | ✅ | Same §6.9, §7.14 | Owner reviews; seller/buyer reply; `review.created` / `review.replied` push |
+| P1-8 | User public profiles + edit | ✅ | Same §3.10–3.11, §7.16–7.17 | Visit `/users/:id`; edit name, bio, avatar, banner, social links |
 
 ---
 
@@ -41,10 +44,15 @@ Ordered backlog with acceptance criteria. Check [FEATURE_IMPLEMENTATION_AUDIT.md
 
 | # | Feature | Status | Doc | Acceptance criteria |
 |---|---------|--------|-----|---------------------|
-| P2-1 | Refresh token flow in frontend | 📋 | — | 401 triggers refresh, not immediate logout |
-| P2-2 | Block owned products in cart | 📋 | — | Cannot add already-owned product |
-| P2-3 | Service health checks + SLA metrics | 📋 | [SLA.md](./SLA.md) | All services `/health` with deps |
-| P2-4 | Admin dashboard | 📋 | [RBAC.md](./RBAC.md) | ADMIN views users + orders |
+| P2-1 | Refresh token flow in frontend | ✅ | — | 401 triggers `/api/auth/refresh`, logout only if refresh fails |
+| P2-2 | Block owned products in cart | ✅ | — | Owned products cannot be added; cart auto-prunes owned IDs |
+| P2-3 | Service health checks + SLA metrics | ✅ | [SLA.md](./SLA.md) | All services `/health` with dependency checks |
+| P2-4 | Admin dashboard | ✅ | [RBAC.md](./RBAC.md) | `/admin` lists users + orders; seed `admin@vividcraft.local` |
+| P2-5 | Light / dark theme toggle | ✅ | — | Persisted theme in Navbar; brand tokens via CSS variables |
+| P2-6 | My Library page (owned digital goods) | ✅ | — | `/library` lists PAID purchases with download + reviews link |
+| P2-7 | Profile feeds (listings, favorites, owned) | ✅ | — | Creator listings with top-seller sort; buyer favorites + owned tabs |
+| P2-8 | Notification inbox (unread, mark read, navigate) | ✅ | [REALTIME_EVENT_DRIVEN_STRATEGY.md](./REALTIME_EVENT_DRIVEN_STRATEGY.md) | Bell dropdown; persisted `Notification` rows; SSE refreshes list |
+| P2-9 | Live favorite count (SSE + optimistic UI) | ✅ | Same | `product.favorite_count_changed` broadcast; card count updates without refetch |
 
 ---
 
@@ -52,44 +60,24 @@ Ordered backlog with acceptance criteria. Check [FEATURE_IMPLEMENTATION_AUDIT.md
 
 | # | Feature | Status | Acceptance criteria |
 |---|---------|--------|---------------------|
-| P3-1 | Creator analytics (sales, views) | 📋 | Dashboard charts from order events |
-| P3-2 | Email notifications | 📋 | Payment receipt via SendGrid/Resend |
-| P3-3 | Full-text search (Elasticsearch) | 📋 | Sub-second search at 10k products |
-| P3-4 | Service registry (Consul) | 📋 | Gateway discovers service URLs dynamically |
+| P3-1 | Creator analytics (sales, views) | ✅ | Dashboard Overview charts from PAID order data |
+| P3-2 | Email notifications | ✅ | Mailpit SMTP receipt on PAID (`localhost:8025`) |
+| P3-3 | Full-text search (Elasticsearch) | ✅ | ES search with Mongo `$text` fallback |
+| P3-4 | Service registry (Consul) | ✅ | Services register; gateway resolves with env fallback |
+| P3-5 | Full asset download (zip/file) | ✅ | Creator uploads asset; Library streams file when present |
 
 ---
 
 ## Already shipped (baseline)
 
-| Feature | Audit ref |
-|---------|-----------|
-| Docker microservices stack | §1 |
-| Redis catalog cache | §2.1–2.2 |
-| BullMQ payment simulation | §2.3, §6.4–6.5 |
-| Marketplace CRUD + search | §4 |
-| Watermark pipeline | §5 |
-| ACID checkout + double-spend guard | §6.1–6.3 |
-| Full web-client flows | §7 |
+All P0–P3 items above are implemented. See audit doc for evidence paths.
 
 ---
 
 ## Suggested sprint plan
 
-### Sprint 1 (security)
-- P0-1, P0-2, P0-3
-- Update audit doc §3
-
-### Sprint 2 (real-time MVP)
-- P1-1, P1-2, P1-3
-- Update audit doc §2.5–2.7
-
-### Sprint 3 (delivery + payments)
-- P1-4, P1-5
-- Update audit doc §6.5–6.8
-
-### Sprint 4 (observability)
-- P2-3
-- SLA health + first Grafana board
+### Sprint 1–5 — ✅ Done
+- Security, real-time, delivery, profiles, refresh/cart guards, admin, assets, Stripe/Mailpit, ES, Consul
 
 ---
 

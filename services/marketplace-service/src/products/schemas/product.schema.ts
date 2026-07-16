@@ -41,11 +41,26 @@ export class Product {
   @Prop()
   watermarkedImagePath?: string;
 
+  @Prop()
+  assetFileUrl?: string;
+
+  @Prop()
+  assetFileName?: string;
+
+  @Prop()
+  assetMimeType?: string;
+
   @Prop({ default: true })
   isPublished!: boolean;
 
   @Prop({ default: 0 })
   downloadCount!: number;
+
+  @Prop({ type: [String], default: [], select: false })
+  favoriteUserIds!: string[];
+
+  @Prop({ default: 0 })
+  favoriteCount!: number;
 }
 
 export const ProductSchema = SchemaFactory.createForClass(Product);

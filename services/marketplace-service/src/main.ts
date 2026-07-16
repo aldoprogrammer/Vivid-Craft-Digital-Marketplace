@@ -2,6 +2,7 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
+import { registerWithConsul } from './consul/register';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -20,6 +21,7 @@ async function bootstrap() {
     .setTitle('VividCraft Marketplace Service')
     .setDescription('Digital art, comics, and asset catalog management API')
     .setVersion('1.0.0')
+    .addBearerAuth()
     .addTag('Products', 'Digital product listings')
     .addTag('Categories', 'Product categories')
     .addTag('Tags', 'Product tags')
@@ -28,9 +30,10 @@ async function bootstrap() {
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('docs', app, document);
 
-  const port = process.env.PORT || 3002;
+  const port = Number(process.env.PORT || 3002);
   await app.listen(port, '0.0.0.0');
   console.log(`Marketplace service running on port ${port}`);
+  await registerWithConsul({ name: 'marketplace-service', port, healthPath: '/health' });
 }
 
 bootstrap();
