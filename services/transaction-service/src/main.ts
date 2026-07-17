@@ -3,9 +3,15 @@ import { ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { registerWithConsul } from './consul/register';
+import { correlationMiddleware } from './common/correlation';
+import { metricsHandler, metricsMiddleware } from './common/metrics';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, { rawBody: true });
+
+  app.use(correlationMiddleware);
+  app.use(metricsMiddleware);
+  app.getHttpAdapter().get('/metrics', metricsHandler);
 
   app.useGlobalPipes(
     new ValidationPipe({
@@ -42,7 +48,7 @@ async function bootstrap() {
   await registerWithConsul({
     name: 'transaction-service',
     port,
-    healthPath: '/health',
+    healthPath: '/health/ready',
   });
 }
 

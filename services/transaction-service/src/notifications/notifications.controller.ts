@@ -1,6 +1,7 @@
 import {
   Controller,
   Get,
+  Headers,
   Patch,
   Param,
   Query,
@@ -61,7 +62,11 @@ export class NotificationsController {
   @Get('stream')
   @ApiOperation({ summary: 'SSE stream for real-time notifications' })
   @ApiQuery({ name: 'token', required: true, description: 'JWT access token' })
-  stream(@Query('token') token: string, @Res() res: Response) {
+  async stream(
+    @Query('token') token: string,
+    @Res() res: Response,
+    @Headers('last-event-id') lastEventIdHeader?: string,
+  ) {
     if (!token) {
       throw new UnauthorizedException('Token required');
     }
@@ -80,11 +85,31 @@ export class NotificationsController {
     res.setHeader('X-Accel-Buffering', 'no');
     res.flushHeaders();
 
+    res.write(`retry: 3000\n\n`);
+
+    const lastEventId =
+      (typeof lastEventIdHeader === 'string' && lastEventIdHeader.trim()) ||
+      undefined;
+
+    if (lastEventId) {
+      const replay = await this.notificationsService.listAfterEventId(
+        userId,
+        lastEventId,
+        100,
+      );
+      for (const event of replay) {
+        res.write(`id: ${event.id}\n`);
+        res.write(`event: ${event.type}\n`);
+        res.write(`data: ${JSON.stringify(event)}\n\n`);
+      }
+    }
+
     const heartbeat = setInterval(() => {
       res.write(': heartbeat\n\n');
     }, 30000);
 
     const unsubscribe = this.notificationsService.subscribe(userId, (event) => {
+      res.write(`id: ${event.id}\n`);
       res.write(`event: ${event.type}\n`);
       res.write(`data: ${JSON.stringify(event)}\n\n`);
     });

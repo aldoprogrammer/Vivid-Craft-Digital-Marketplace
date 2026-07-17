@@ -9,12 +9,18 @@
     "dev:down": "docker compose down",
     "dev:logs": "docker compose logs -f",
     "dev:clean": "docker compose down -v --remove-orphans",
+    "dev:obs": "docker compose -f docker-compose.yml -f docker-compose.observability.yml up --build -d",
+    "dev:obs:down": "docker compose -f docker-compose.yml -f docker-compose.observability.yml down",
     "install:all": "npm run install:auth && npm run install:marketplace && npm run install:transaction && npm run install:gateway && npm run install:web",
     "install:auth": "cd services/auth-service && npm install",
     "install:marketplace": "cd services/marketplace-service && npm install",
     "install:transaction": "cd services/transaction-service && npm install",
     "install:gateway": "cd services/api-gateway && npm install",
-    "install:web": "cd apps/web-client && npm install"
+    "install:web": "cd apps/web-client && npm install",
+    "test:gateway": "cd services/api-gateway && npm test",
+    "test:scan": "cd services/marketplace-service && npx ts-node --transpile-only src/redis/redis.scan.test.ts",
+    "test:unit": "npm run test:gateway && npm run test:scan",
+    "synthetic": "node tests/synthetic/checkout-flow.js"
   },
   "engines": {
     "node": ">=20.0.0"

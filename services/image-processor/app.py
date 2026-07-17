@@ -1,17 +1,76 @@
 import os
+import time
 import uuid
 from datetime import datetime, timezone
 from io import BytesIO
 
-from flask import Flask, request, jsonify, send_from_directory
+from flask import Flask, request, jsonify, send_from_directory, Response
 from PIL import Image, ImageDraw, ImageFont
+
+try:
+    from prometheus_client import (
+        Counter,
+        Histogram,
+        CONTENT_TYPE_LATEST,
+        generate_latest,
+    )
+
+    _PROM_AVAILABLE = True
+except ImportError:  # graceful fallback to simple text counters
+    _PROM_AVAILABLE = False
 
 app = Flask(__name__)
 
 OUTPUT_DIR = os.environ.get("OUTPUT_DIR", "/app/output")
 MAX_IMAGE_SIZE_BYTES = int(os.environ.get("MAX_IMAGE_SIZE_MB", "20")) * 1024 * 1024
+SERVICE_NAME = "image-processor"
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
+
+if _PROM_AVAILABLE:
+    HTTP_REQUESTS_TOTAL = Counter(
+        "http_requests_total",
+        "Total HTTP requests",
+        ["method", "route", "status_code", "service"],
+    )
+    HTTP_REQUEST_DURATION = Histogram(
+        "http_request_duration_seconds",
+        "HTTP request duration in seconds",
+        ["method", "route", "status_code", "service"],
+        buckets=(0.01, 0.05, 0.1, 0.25, 0.5, 1, 2, 5),
+    )
+else:
+    _FALLBACK_COUNTERS: dict[str, int] = {}
+
+
+@app.before_request
+def _start_timer():
+    request._start_time = time.perf_counter()
+
+
+@app.after_request
+def _record_metrics(response):
+    if request.path == "/metrics":
+        return response
+    route = str(request.url_rule.rule) if request.url_rule else request.path
+    labels = (request.method, route, str(response.status_code), SERVICE_NAME)
+    if _PROM_AVAILABLE:
+        HTTP_REQUESTS_TOTAL.labels(*labels).inc()
+        elapsed = time.perf_counter() - getattr(request, "_start_time", time.perf_counter())
+        HTTP_REQUEST_DURATION.labels(*labels).observe(elapsed)
+    else:
+        key = f'http_requests_total{{method="{labels[0]}",route="{labels[1]}",status_code="{labels[2]}",service="{labels[3]}"}}'
+        _FALLBACK_COUNTERS[key] = _FALLBACK_COUNTERS.get(key, 0) + 1
+    return response
+
+
+@app.route("/metrics", methods=["GET"])
+def metrics():
+    if _PROM_AVAILABLE:
+        return Response(generate_latest(), mimetype=CONTENT_TYPE_LATEST)
+    lines = ["# HELP http_requests_total Total HTTP requests", "# TYPE http_requests_total counter"]
+    lines += [f"{k} {v}" for k, v in _FALLBACK_COUNTERS.items()]
+    return Response("\n".join(lines) + "\n", mimetype="text/plain")
 
 
 def apply_vividcraft_watermark(image: Image.Image) -> Image.Image:
@@ -50,13 +109,40 @@ def apply_vividcraft_watermark(image: Image.Image) -> Image.Image:
     return result.convert("RGB")
 
 
-@app.route("/health", methods=["GET"])
-def health():
+@app.route("/health/live", methods=["GET"])
+def health_live():
     return jsonify({
         "status": "ok",
         "service": "image-processor",
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "check": "live",
     })
+
+
+@app.route("/health/ready", methods=["GET"])
+def health_ready():
+    checks = {"output_dir": "ok"}
+    try:
+        probe = os.path.join(OUTPUT_DIR, f".healthcheck_{uuid.uuid4().hex[:8]}")
+        with open(probe, "w") as f:
+            f.write("ok")
+        os.remove(probe)
+    except OSError:
+        checks["output_dir"] = "error"
+
+    healthy = checks["output_dir"] == "ok"
+    payload = {
+        "status": "ok" if healthy else "unavailable",
+        "service": "image-processor",
+        "check": "ready",
+        "checks": checks,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
+    return jsonify(payload), (200 if healthy else 503)
+
+
+@app.route("/health", methods=["GET"])
+def health():
+    return health_ready()
 
 
 @app.route("/upload", methods=["POST"])

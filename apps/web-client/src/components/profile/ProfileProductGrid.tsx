@@ -66,6 +66,7 @@ export function ProfileProductGrid({
               price={product.price}
               creatorName={product.creatorName}
               previewImageUrl={product.previewImageUrl}
+              isWatermarked={Boolean(product.watermarkedImagePath)}
               favoriteCount={product.favoriteCount ?? 0}
               alreadyOwned={owned}
               index={index}

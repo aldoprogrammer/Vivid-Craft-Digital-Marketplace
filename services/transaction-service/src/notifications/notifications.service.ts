@@ -8,36 +8,115 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { Prisma } from '@prisma/client';
 import Redis from 'ioredis';
-import { DomainEvent, EVENTS_CHANNEL } from '../events/events.module';
+import { DomainEvent, EVENTS_CHANNEL, EVENTS_STREAM } from '../events/events.module';
 import { PrismaService } from '../prisma/prisma.module';
 import { buildNotificationContent } from './notification-event.mapper';
 
 type SseListener = (event: DomainEvent) => void;
 
+const STREAM_GROUP = 'notifications';
+const STREAM_CONSUMER = `notifications-${process.pid}`;
+
 @Injectable()
 export class NotificationsService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(NotificationsService.name);
   private subscriber: Redis;
+  private streamClient: Redis;
   private readonly clients = new Map<string, Set<SseListener>>();
+  private sseConnectionCount = 0;
+  private streamRunning = false;
 
   constructor(
     private configService: ConfigService,
     private prisma: PrismaService,
   ) {
-    this.subscriber = new Redis({
+    const redisOpts = {
       host: this.configService.get<string>('REDIS_HOST', 'redis'),
       port: this.configService.get<number>('REDIS_PORT', 6379),
-    });
+    };
+    this.subscriber = new Redis(redisOpts);
+    this.streamClient = new Redis(redisOpts);
   }
 
-  onModuleInit() {
+  async onModuleInit() {
     this.subscriber.subscribe(EVENTS_CHANNEL);
     this.subscriber.on('message', (_channel, message) => {
       void this.handleIncomingEvent(message);
     });
+
+    await this.ensureStreamGroup();
+    this.streamRunning = true;
+    void this.consumeStreamLoop();
   }
 
-  private async handleIncomingEvent(message: string) {
+  private async ensureStreamGroup() {
+    try {
+      await this.streamClient.xgroup('CREATE', EVENTS_STREAM, STREAM_GROUP, '0', 'MKSTREAM');
+    } catch (err) {
+      const msg = (err as Error).message ?? '';
+      if (!msg.includes('BUSYGROUP')) {
+        this.logger.warn(`Stream group setup: ${msg}`);
+      }
+    }
+  }
+
+  private async consumeStreamLoop() {
+    while (this.streamRunning) {
+      try {
+        const results = (await this.streamClient.xreadgroup(
+          'GROUP',
+          STREAM_GROUP,
+          STREAM_CONSUMER,
+          'COUNT',
+          10,
+          'BLOCK',
+          5000,
+          'STREAMS',
+          EVENTS_STREAM,
+          '>',
+        )) as [string, [string, string[]][]][] | null;
+
+        if (!results) continue;
+
+        for (const [, messages] of results) {
+          for (const [messageId, fields] of messages) {
+            const event = this.fieldsToEvent(fields);
+            if (event) {
+              await this.handleIncomingEvent(JSON.stringify(event));
+            }
+            await this.streamClient.xack(EVENTS_STREAM, STREAM_GROUP, messageId);
+          }
+        }
+      } catch (err) {
+        if (!this.streamRunning) break;
+        this.logger.warn(`Stream consumer error: ${(err as Error).message}`);
+        await new Promise((r) => setTimeout(r, 2000));
+      }
+    }
+  }
+
+  private fieldsToEvent(fields: string[]): DomainEvent | null {
+    const map: Record<string, string> = {};
+    for (let i = 0; i < fields.length; i += 2) {
+      map[fields[i]] = fields[i + 1];
+    }
+    if (!map.id || !map.type) return null;
+    let data: Record<string, unknown> = {};
+    try {
+      data = map.data ? (JSON.parse(map.data) as Record<string, unknown>) : {};
+    } catch {
+      data = {};
+    }
+    return {
+      id: map.id,
+      type: map.type,
+      occurredAt: map.occurredAt || new Date().toISOString(),
+      data,
+      ...(map.correlationId ? { correlationId: map.correlationId } : {}),
+    };
+  }
+
+  async handleIncomingEvent(message: string) {
     try {
       const event = JSON.parse(message) as DomainEvent;
 
@@ -49,16 +128,21 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
       const userId = event.data?.userId as string | undefined;
       if (!userId) return;
 
-      await this.persistFromEvent(userId, event);
-      this.emitToUser(userId, event);
+      const created = await this.persistFromEvent(userId, event);
+      if (created) {
+        this.emitToUser(userId, event);
+      }
     } catch (err) {
       this.logger.warn(`Failed to parse event: ${(err as Error).message}`);
     }
   }
 
-  async persistFromEvent(userId: string, event: DomainEvent) {
+  /**
+   * @returns true if a new notification row was created
+   */
+  async persistFromEvent(userId: string, event: DomainEvent): Promise<boolean> {
     const content = buildNotificationContent(event);
-    if (!content) return;
+    if (!content) return false;
 
     try {
       await this.prisma.notification.create({
@@ -70,12 +154,15 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
           linkPath: content.linkPath,
           payload: event.data as Prisma.InputJsonValue,
           eventId: event.id,
+          correlationId: event.correlationId ?? null,
         },
       });
+      return true;
     } catch (err) {
       const code = (err as { code?: string }).code;
-      if (code === 'P2002') return;
+      if (code === 'P2002') return false;
       this.logger.warn(`Failed to persist notification: ${(err as Error).message}`);
+      return false;
     }
   }
 
@@ -84,15 +171,21 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
       this.clients.set(userId, new Set());
     }
     this.clients.get(userId)!.add(listener);
+    this.sseConnectionCount += 1;
 
     return () => {
       const set = this.clients.get(userId);
       if (!set) return;
       set.delete(listener);
+      this.sseConnectionCount = Math.max(0, this.sseConnectionCount - 1);
       if (set.size === 0) {
         this.clients.delete(userId);
       }
     };
+  }
+
+  getSseConnectionCount(): number {
+    return this.sseConnectionCount;
   }
 
   async listForUser(userId: string, limit = 30) {
@@ -109,6 +202,33 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
       items: items.map((item) => this.toDto(item)),
       unreadCount,
     };
+  }
+
+  /**
+   * Replay persisted notifications after a domain event id (for SSE Last-Event-ID).
+   */
+  async listAfterEventId(userId: string, afterEventId: string, limit = 50): Promise<DomainEvent[]> {
+    const anchor = await this.prisma.notification.findFirst({
+      where: { userId, eventId: afterEventId },
+    });
+    if (!anchor) return [];
+
+    const items = await this.prisma.notification.findMany({
+      where: {
+        userId,
+        createdAt: { gt: anchor.createdAt },
+      },
+      orderBy: { createdAt: 'asc' },
+      take: limit,
+    });
+
+    return items.map((item) => ({
+      id: item.eventId ?? item.id,
+      type: item.type,
+      occurredAt: item.createdAt.toISOString(),
+      data: (item.payload as Record<string, unknown>) ?? { userId },
+      ...(item.correlationId ? { correlationId: item.correlationId } : {}),
+    }));
   }
 
   async countUnread(userId: string) {
@@ -183,6 +303,8 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
   }
 
   onModuleDestroy() {
+    this.streamRunning = false;
     this.subscriber.disconnect();
+    this.streamClient.disconnect();
   }
 }

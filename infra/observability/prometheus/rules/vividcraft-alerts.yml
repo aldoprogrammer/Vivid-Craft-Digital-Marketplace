@@ -1,0 +1,63 @@
+groups:
+  - name: vividcraft-availability
+    rules:
+      - alert: TargetDown
+        expr: up == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Target {{ $labels.job }} is down"
+          description: "{{ $labels.instance }} ({{ $labels.job }}) has been unreachable for over 1 minute."
+
+      - alert: SyntheticProbeFailing
+        expr: probe_success == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Synthetic probe failing for {{ $labels.instance }}"
+          description: "Blackbox /health/ready probe for {{ $labels.instance }} has failed for over 1 minute."
+
+  - name: vividcraft-errors
+    rules:
+      - alert: HighHttp5xxRate
+        expr: |
+          sum by (service) (rate(http_requests_total{status_code=~"5.."}[5m]))
+            /
+          sum by (service) (rate(http_requests_total[5m])) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High 5xx error rate on {{ $labels.service }}"
+          description: "{{ $labels.service }} 5xx ratio is above 5% over the last 5 minutes."
+
+  - name: vividcraft-dependencies
+    rules:
+      - alert: RedisDown
+        expr: redis_up == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Redis is down"
+          description: "redis-exporter reports Redis unavailable for over 1 minute."
+
+      - alert: PostgresDown
+        expr: pg_up == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Postgres is down"
+          description: "postgres-exporter reports Postgres unavailable for over 1 minute."
+
+      - alert: MongoDownPlaceholder
+        expr: mongodb_up == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "MongoDB is down"
+          description: "mongodb-exporter reports MongoDB unavailable for over 1 minute."

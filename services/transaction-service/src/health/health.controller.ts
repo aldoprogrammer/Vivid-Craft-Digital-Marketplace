@@ -1,26 +1,22 @@
-import { Controller, Get } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import Redis from 'ioredis';
+import { Controller, Get, HttpStatus, Res } from '@nestjs/common';
+import { Response } from 'express';
 import { PrismaService } from '../prisma/prisma.module';
+import { EventPublisherService } from '../events/events.module';
 
 @Controller('health')
 export class HealthController {
-  private redis: Redis;
-
   constructor(
     private prisma: PrismaService,
-    configService: ConfigService,
-  ) {
-    this.redis = new Redis({
-      host: configService.get<string>('REDIS_HOST', 'redis'),
-      port: configService.get<number>('REDIS_PORT', 6379),
-      lazyConnect: true,
-      maxRetriesPerRequest: 1,
-    });
+    private readonly eventPublisher: EventPublisherService,
+  ) {}
+
+  @Get('live')
+  live() {
+    return { status: 'ok', service: 'transaction-service', check: 'live' };
   }
 
-  @Get()
-  async check() {
+  @Get('ready')
+  async ready(@Res({ passthrough: true }) res: Response) {
     const checks: Record<string, string> = { postgres: 'ok', redis: 'ok' };
 
     try {
@@ -30,20 +26,25 @@ export class HealthController {
     }
 
     try {
-      await this.redis.connect();
-      await this.redis.ping();
-      this.redis.disconnect();
+      await this.eventPublisher.ping();
     } catch {
       checks.redis = 'error';
     }
 
-    const status = Object.values(checks).every((v) => v === 'ok') ? 'ok' : 'degraded';
+    const healthy = checks.postgres === 'ok' && checks.redis === 'ok';
+    res.status(healthy ? HttpStatus.OK : HttpStatus.SERVICE_UNAVAILABLE);
 
     return {
-      status,
+      status: healthy ? 'ok' : 'unavailable',
       service: 'transaction-service',
+      check: 'ready',
       checks,
       timestamp: new Date().toISOString(),
     };
+  }
+
+  @Get()
+  async check(@Res({ passthrough: true }) res: Response) {
+    return this.ready(res);
   }
 }

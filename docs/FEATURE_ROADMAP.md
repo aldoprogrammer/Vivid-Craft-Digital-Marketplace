@@ -53,6 +53,10 @@ Ordered backlog with acceptance criteria. Check [FEATURE_IMPLEMENTATION_AUDIT.md
 | P2-7 | Profile feeds (listings, favorites, owned) | ✅ | — | Creator listings with top-seller sort; buyer favorites + owned tabs |
 | P2-8 | Notification inbox (unread, mark read, navigate) | ✅ | [REALTIME_EVENT_DRIVEN_STRATEGY.md](./REALTIME_EVENT_DRIVEN_STRATEGY.md) | Bell dropdown; persisted `Notification` rows; SSE refreshes list |
 | P2-9 | Live favorite count (SSE + optimistic UI) | ✅ | Same | `product.favorite_count_changed` broadcast; card count updates without refetch |
+| P2-10 | Gateway JWT defense-in-depth | ✅ | [RBAC.md](./RBAC.md) | Unauth writes 401 at gateway; public catalog still open |
+| P2-11 | Truthful Protected badge | ✅ | Audit §5.3 | Badge only when `watermarkedImagePath` set |
+| P2-12 | Event hardening (idempotency, DLQ, correlation, SCAN, SSE replay) | ✅ | [REALTIME_EVENT_DRIVEN_STRATEGY.md](./REALTIME_EVENT_DRIVEN_STRATEGY.md) | Persist-before-emit; payment DLQ; Last-Event-ID |
+| P2-13 | Health ready/live + observability stack | ✅ | [SLA.md](./SLA.md) · [RUNBOOK.md](./RUNBOOK.md) | `/health/ready` 503; Prometheus/Grafana/Loki via `npm run dev:obs` |
 
 ---
 
@@ -68,16 +72,26 @@ Ordered backlog with acceptance criteria. Check [FEATURE_IMPLEMENTATION_AUDIT.md
 
 ---
 
+## Explicitly pending (external / prod-only)
+
+| Item | Why pending |
+|------|-------------|
+| Stripe sandbox E2E | Secret key configured; still needs Stripe CLI `whsec_...` and full PAID/delivery verification |
+| Automated DB backups / RPO drills | Production ops — not in local Compose |
+
+---
+
 ## Already shipped (baseline)
 
-All P0–P3 items above are implemented. See audit doc for evidence paths.
+All P0–P3 roadmap items above are implemented for local/sandbox. See audit doc for evidence.
 
 ---
 
 ## Suggested sprint plan
 
-### Sprint 1–5 — ✅ Done
-- Security, real-time, delivery, profiles, refresh/cart guards, admin, assets, Stripe/Mailpit, ES, Consul
+### Sprint 1–6 — ✅ Done
+- Security, real-time, delivery, profiles, admin, assets, Stripe/Mailpit, ES, Consul
+- Gateway JWT, event hardening, observability, synthetic/k6 scripts
 
 ---
 

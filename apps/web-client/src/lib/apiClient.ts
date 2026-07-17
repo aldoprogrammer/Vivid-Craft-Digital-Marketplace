@@ -18,7 +18,7 @@ apiClient.interceptors.request.use((config) => {
 
 let refreshPromise: Promise<boolean> | null = null;
 
-async function refreshAccessToken(): Promise<boolean> {
+export async function refreshAccessToken(): Promise<boolean> {
   const { refreshToken, setTokens, logout } = useAuthStore.getState();
   if (!refreshToken) {
     logout();
@@ -45,6 +45,12 @@ apiClient.interceptors.response.use(
     const original = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
     const url = original?.url ?? '';
     const isAuthRefresh = url.includes('/auth/refresh') || url.includes('/api/auth/refresh');
+
+    if (error.response?.status === 403) {
+      const { notify } = await import('@/lib/toast');
+      notify.error('You do not have permission to perform this action');
+      return Promise.reject(error);
+    }
 
     if (error.response?.status !== 401 || !original || original._retry || isAuthRefresh) {
       return Promise.reject(error);

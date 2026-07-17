@@ -16,6 +16,7 @@ interface ProductCardProps {
   price: number;
   creatorName: string;
   previewImageUrl?: string;
+  isWatermarked?: boolean;
   onAddToCart: () => void;
   onFavorite?: () => void;
   isFavorite?: boolean;
@@ -34,6 +35,7 @@ export function ProductCard({
   price,
   creatorName,
   previewImageUrl,
+  isWatermarked = false,
   onAddToCart,
   onFavorite,
   isFavorite = false,
@@ -84,7 +86,7 @@ export function ProductCard({
             <span className="text-xs">{favoriteCount}</span>
           </button>
         )}
-        {imageSrc && (
+        {isWatermarked && imageSrc && (
           <span className={`absolute badge bg-black/50 text-white border border-white/10 ${
             onFavorite ? 'top-16 right-3' : 'top-3 right-3'
           }`}>

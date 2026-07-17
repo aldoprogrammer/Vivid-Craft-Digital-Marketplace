@@ -35,10 +35,24 @@ export class RedisService implements OnModuleDestroy {
   }
 
   async delPattern(pattern: string): Promise<void> {
-    const keys = await this.client.keys(pattern);
-    if (keys.length > 0) {
-      await this.client.del(...keys);
-    }
+    let cursor = '0';
+    do {
+      const [nextCursor, keys] = await this.client.scan(
+        cursor,
+        'MATCH',
+        pattern,
+        'COUNT',
+        100,
+      );
+      cursor = nextCursor;
+      if (keys.length > 0) {
+        try {
+          await this.client.unlink(...keys);
+        } catch {
+          await this.client.del(...keys);
+        }
+      }
+    } while (cursor !== '0');
   }
 
   async publish(channel: string, message: string): Promise<void> {

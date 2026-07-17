@@ -16,6 +16,7 @@ export interface ProductSearchDoc {
   tags: string[];
   isPublished: boolean;
   previewImageUrl?: string;
+  watermarkedImagePath?: string;
   favoriteCount?: number;
   createdAt?: string;
 }

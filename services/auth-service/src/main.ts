@@ -3,9 +3,13 @@ import { ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { registerWithConsul } from './consul/register';
+import { metricsHandler, metricsMiddleware } from './common/metrics';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+
+  app.use(metricsMiddleware);
+  app.getHttpAdapter().get('/metrics', metricsHandler);
 
   app.useGlobalPipes(
     new ValidationPipe({
@@ -33,7 +37,7 @@ async function bootstrap() {
   await app.listen(port, '0.0.0.0');
   console.log(`Auth service running on port ${port}`);
   console.log(`Swagger docs at http://localhost:${port}/docs`);
-  await registerWithConsul({ name: 'auth-service', port, healthPath: '/health' });
+  await registerWithConsul({ name: 'auth-service', port, healthPath: '/health/ready' });
 }
 
 bootstrap();

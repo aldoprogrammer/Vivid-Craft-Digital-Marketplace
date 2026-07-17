@@ -40,6 +40,18 @@ export class StripeWebhookController {
 
     const event = this.stripeService.constructEvent(rawBody, signature);
 
+    try {
+      await this.prisma.stripeWebhookEvent.create({
+        data: { id: event.id, type: event.type },
+      });
+    } catch (err) {
+      const code = (err as { code?: string }).code;
+      if (code === 'P2002') {
+        return { received: true, duplicate: true };
+      }
+      throw err;
+    }
+
     if (event.type === 'checkout.session.completed') {
       const session = event.data.object as {
         metadata?: { orderId?: string };

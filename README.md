@@ -18,6 +18,9 @@ Digital art & comic marketplace built as microservices. Creators list comics, ar
 | Mailpit | Dev SMTP inbox | 8025 / 1025 |
 | Elasticsearch | Product full-text search | 9200 |
 | Consul | Service registry | 8500 |
+| Prometheus (optional) | Metrics | 9090 |
+| Grafana (optional) | Dashboards | 3005 |
+| Alertmanager (optional) | Alerts → Mailpit | 9093 |
 
 ## Requirements
 
@@ -36,11 +39,15 @@ Digital art & comic marketplace built as microservices. Creators list comics, ar
 | Notifications (SSE + inbox) | `transaction-service` | Navbar bell dropdown |
 | API routing | `api-gateway` | All requests via `VITE_API_URL` |
 
-**Watermark flow:** Creator uploads preview → marketplace sends to Flask `/watermark` → watermarked image at `/api/images/files/{filename}` → shown on product cards. Purchased asset (zip/pdf) is uploaded separately without watermark.
+**Watermark flow:** Creator uploads preview → Flask `/watermark` → `previewImageUrl` + `watermarkedImagePath` → **Protected** badge only when watermarked. Purchased asset has no watermark.
 
-**Notification flow:** Domain events → Redis Pub/Sub → transaction-service persists + SSE push → Navbar bell (unread badge, mark read, click to navigate). No HTTP polling.
+**Notification flow:** Domain events → Redis Pub/Sub + Stream → persist inbox → SSE (with Last-Event-ID replay) → Navbar bell. No HTTP polling.
 
-**Rate limiting:** Gateway skips SSE stream from the limiter. Dev default 2000 req/15min. Restart `api-gateway` after changing `RATE_LIMIT_*` env.
+**Security:** Gateway JWT pre-check (public catalog/auth/SSE whitelist) + per-service RBAC. Shared `JWT_SECRET`.
+
+**Rate limiting:** Gateway skips SSE. Dev default 2000/15min.
+
+**Observability:** `npm run dev:obs` → Prometheus :9090, Grafana :3005 (`admin`/`admin`), Alertmanager :9093, Loki. Runbook: [docs/RUNBOOK.md](docs/RUNBOOK.md).
 
 ## Quick start
 
@@ -65,12 +72,37 @@ Digital art & comic marketplace built as microservices. Creators list comics, ar
 
 4. **Open the app**
    - Website: http://localhost:5173
-   - API health: http://localhost:3000/health
+   - API health: http://localhost:3000/health/ready
+   - Metrics: http://localhost:3000/metrics
    - Mailpit: http://localhost:8025
    - Consul UI: http://localhost:8500
+   - Observability: `npm run dev:obs` → Grafana http://localhost:3005
    - Admin seed (after `npm run prisma:seed` in auth-service): `admin@vividcraft.local` / `AdminPass123!`
-   - Stripe (optional): set `STRIPE_SECRET_KEY` + `STRIPE_WEBHOOK_SECRET` in env; otherwise payments stay simulated
+   - Stripe (optional): set `STRIPE_SECRET_KEY` + `STRIPE_WEBHOOK_SECRET`; else simulated
    - API docs: http://localhost:3000/api/docs
+   - Synthetic: `node tests/synthetic/checkout-flow.js`
+
+### Stripe sandbox test
+
+1. Set `STRIPE_SECRET_KEY` in `services/transaction-service/.env`.
+2. Start the webhook forwarder:
+   ```bash
+   stripe login
+   stripe listen --forward-to localhost:3000/api/transactions/webhooks/stripe
+   ```
+3. Copy the generated `whsec_...` into `STRIPE_WEBHOOK_SECRET`.
+4. Restart:
+   ```bash
+   docker compose restart transaction-service
+   ```
+5. Checkout with:
+   ```text
+   Card: 4242 4242 4242 4242
+   Expiry: any future date
+   CVC: any 3 digits
+   Postal code: any valid value
+   ```
+6. Verify the order becomes **PAID**, Library delivery appears, the notification arrives, and Mailpit receives the receipt.
 
 ## Useful commands
 
@@ -80,6 +112,8 @@ Digital art & comic marketplace built as microservices. Creators list comics, ar
 |---------|----------------|
 | `npm run dev` | Build images + start all services (foreground, shows logs). Same as `docker compose up --build`. |
 | `npm run dev:detached` | Build images + start all services in background. Same as `docker compose up --build -d`. |
+| `npm run dev:obs` | App + Prometheus/Grafana/Loki/Alertmanager (detached) |
+| `npm run dev:obs:down` | Tear down app + observability overlay |
 | `npm run dev:down` | Stop all containers |
 | `npm run dev:logs` | Follow logs (use after detached start) |
 | `npm run dev:clean` | Stop and remove volumes (fresh database) |

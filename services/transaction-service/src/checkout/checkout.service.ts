@@ -23,7 +23,12 @@ export class CheckoutService {
     private stripeService: StripeService,
   ) {}
 
-  async processCheckout(dto: CheckoutDto, userId: string, userEmail: string) {
+  async processCheckout(
+    dto: CheckoutDto,
+    userId: string,
+    userEmail: string,
+    correlationId?: string,
+  ) {
     const itemsWithCreator = await Promise.all(
       dto.items.map(async (item) => {
         const creatorId = await this.marketplaceClient.getProductCreatorId(item.productId);
@@ -144,12 +149,16 @@ export class CheckoutService {
       },
     );
 
-    await this.eventPublisher.publish('order.created', {
-      userId,
-      orderId: order.id,
-      invoiceNo: order.invoiceNo,
-      status: order.status,
-    });
+    await this.eventPublisher.publish(
+      'order.created',
+      {
+        userId,
+        orderId: order.id,
+        invoiceNo: order.invoiceNo,
+        status: order.status,
+      },
+      correlationId,
+    );
 
     if (useStripe) {
       const session = await this.stripeService.createCheckoutSession({
@@ -183,10 +192,14 @@ export class CheckoutService {
         totalAmount,
         userId,
         userEmail,
+        ...(correlationId ? { correlationId } : {}),
       },
       {
+        jobId: `payment:${order.id}`,
         attempts: 3,
         backoff: { type: 'exponential', delay: 2000 },
+        removeOnComplete: 100,
+        removeOnFail: false,
       },
     );
 

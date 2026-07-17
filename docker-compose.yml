@@ -212,6 +212,7 @@ services:
     env_file:
       - ./services/api-gateway/.env.example
     environment:
+      JWT_SECRET: ${JWT_SECRET:-change-this-to-a-secure-random-secret-in-production}
       AUTH_SERVICE_URL: http://auth-service:3001
       MARKETPLACE_SERVICE_URL: http://marketplace-service:3002
       TRANSACTION_SERVICE_URL: http://transaction-service:3003

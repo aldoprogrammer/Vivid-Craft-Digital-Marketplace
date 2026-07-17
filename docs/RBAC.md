@@ -1,6 +1,6 @@
 # RBAC — Role-Based Access Control
 
-Current implementation, gaps, and execute plan for full enforcement.
+Current implementation and enforcement model.
 
 ---
 
@@ -10,29 +10,28 @@ Current implementation, gaps, and execute plan for full enforcement.
 |------|---------------|--------------|
 | `FAN` | Buyer / collector | Default on register |
 | `CREATOR` | Artist / publisher | Selected at register |
-| `ADMIN` | Platform operator | Seed script or DB only (not in public UI) |
-
-Defined in: `services/auth-service/prisma/schema.prisma`
+| `ADMIN` | Platform operator | Seed only (`admin@vividcraft.local`) — not public register |
 
 ---
 
-## Current state
+## Current state (2026-07-17)
 
 | Layer | Status | Detail |
 |-------|--------|--------|
 | Role in JWT payload | ✅ | `{ sub, email, role }` |
-| `RolesGuard` + `@Roles()` decorator | ✅ | `auth-service` only |
-| Routes protected | 🟡 | `GET /users/creators` → ADMIN only |
-| Marketplace write APIs | ❌ | Open — no JWT required |
-| Transaction APIs | ❌ | Open — `userId` passed in body/query |
-| Gateway | ❌ | No auth middleware |
-| Frontend UI gating | 🟡 | Dashboard link hidden for non-creators |
+| Per-service `JwtAuthGuard` + `RolesGuard` | ✅ | auth, marketplace, transaction |
+| Marketplace write APIs | ✅ | JWT + role + ownership |
+| Transaction APIs | ✅ | JWT; checkout uses `user.sub` |
+| Gateway JWT pre-check | ✅ | `services/api-gateway/src/middleware/jwt.middleware.ts` |
+| Spoofable identity headers stripped | ✅ | Client `x-user-*` removed; set only after verify |
+| Frontend UI gating | ✅ | Role links + 403 toast in `apiClient` |
+| Admin seed | ✅ | `prisma/seed.ts` |
 
-**Risk:** Anyone can call `POST /api/marketplace/products` or `POST /api/transactions/checkout` with arbitrary `userId`.
+**Model:** Option B (per-service JWT) **plus** gateway defense-in-depth. Services remain the trust anchor; gateway rejects unauthenticated protected routes early.
 
 ---
 
-## Permission matrix (target)
+## Permission matrix
 
 | Resource / Action | FAN | CREATOR | ADMIN |
 |-------------------|-----|---------|-------|
@@ -42,97 +41,67 @@ Defined in: `services/auth-service/prisma/schema.prisma`
 | Create product | ❌ | ✅ | ✅ |
 | Update own product | ❌ | ✅ (owner) | ✅ |
 | Delete own product | ❌ | ✅ (owner) | ✅ |
-| Upload watermark | ❌ | ✅ (owner) | ✅ |
-| List all users | ❌ | ❌ | ✅ |
-| List creators | ❌ | ❌ | ✅ |
-| Moderate any product | ❌ | ❌ | ✅ |
-| View any order | ❌ | ❌ | ✅ |
+| Upload watermark / asset | ❌ | ✅ (owner) | ✅ |
+| Favorite products | ✅ | ❌ | ❌ |
+| List all users / creators | ❌ | ❌ | ✅ |
+| Admin dashboard | ❌ | ❌ | ✅ |
+| Replay payment DLQ | ❌ | ❌ | ✅ |
 
 ---
 
-## Phase 1 — Shared auth middleware
+## Gateway public whitelist (method-aware)
 
-### Option A (recommended): Gateway JWT validation
+Public without Bearer token:
 
-- [ ] Add `services/api-gateway/src/middleware/jwt.middleware.ts`
-- [ ] Verify JWT with shared `JWT_SECRET`
-- [ ] Attach `req.user = { sub, email, role }` for downstream (custom header `X-User-Id`, `X-User-Role`)
-- [ ] Public routes whitelist: `/api/auth/login`, `/api/auth/register`, `GET /api/marketplace/products`, `GET /api/images/files/*`
+- `POST /api/auth/login|register|refresh`
+- `GET /api/marketplace/products` (+ public product detail, creator listings, user favorites)
+- `GET /api/marketplace/categories|tags`
+- `GET /api/users/:id/public`
+- `GET /api/images/files/*`
+- `GET /api/transactions/notifications/stream` (JWT in query — EventSource)
+- `GET /api/transactions/reviews/product/:id`
+- `GET /api/transactions/profile/:id/{library,top-products,sales-count}`
+- `POST /api/transactions/webhooks/stripe`
+- `/health*`, `/metrics`, `/api/docs*`
 
-### Option B: Per-service guards
+Protected examples (401 without token at gateway):
 
-- [ ] Copy `JwtAuthGuard`, `RolesGuard`, decorators to each Nest service
-- [ ] Validate JWT in each service independently
-
-**Pick one** — avoid both to prevent drift.
+- `POST /api/marketplace/products`
+- `GET /api/marketplace/products/mine`
+- `GET /api/marketplace/products/favorites/mine`
+- `GET /api/transactions/orders`
+- `GET /api/transactions/notifications`
 
 ---
 
-## Phase 2 — Marketplace enforcement
+## Frontend
 
-| Endpoint | Guard |
-|----------|-------|
-| `POST /products` | JWT + `@Roles(CREATOR, ADMIN)` |
-| `PUT /products/:id` | JWT + owner check (`creatorId === user.sub`) or ADMIN |
-| `DELETE /products/:id` | JWT + owner or ADMIN |
-| `POST /products/:id/watermark` | JWT + owner or ADMIN |
-| `GET /products` | Public |
-| `POST /categories`, `POST /tags` | ADMIN only (or CREATOR for tags — decide) |
+- JWT on mutating requests via `apiClient`
+- Checkout `userId` ignored; backend uses JWT `sub`
+- **403** → single toast: “You do not have permission…”
 
-### Owner check helper
+---
 
-```typescript
-async assertProductOwner(productId: string, userId: string, role: Role) {
-  if (role === Role.ADMIN) return;
-  const product = await this.productsService.findById(productId);
-  if (product.creatorId !== userId) throw new ForbiddenException();
-}
+## Admin bootstrap
+
+```bash
+# in auth-service
+npm run prisma:seed
+# admin@vividcraft.local / AdminPass123!
 ```
 
 ---
 
-## Phase 3 — Transaction enforcement
-
-| Endpoint | Guard |
-|----------|-------|
-| `POST /checkout` | JWT — use `user.sub` from token, **ignore** body `userId` |
-| `GET /orders` | JWT — return only orders where `userId === user.sub` (ADMIN: all) |
-
----
-
-## Phase 4 — Frontend alignment
-
-- [ ] Send JWT on all mutating requests (already via `apiClient`)
-- [ ] Remove `userId` from checkout payload — backend derives from token
-- [ ] Handle 403 with toast + redirect
-- [ ] Admin panel (future): user list, order moderation
-
----
-
-## Phase 5 — Admin bootstrap
-
-- [ ] Seed script: `prisma/seed.ts` creates `admin@vividcraft.local` with ADMIN role
-- [ ] Document credentials in README (dev only)
-
----
-
-## Testing checklist
+## Verification
 
 ```
-[ ] FAN cannot POST /products → 403
-[ ] CREATOR can POST /products → 201
-[ ] CREATOR cannot PUT another creator's product → 403
-[ ] ADMIN can PUT any product → 200
-[ ] Checkout with mismatched userId in body ignored; uses JWT sub
-[ ] FAN cannot GET /users/creators → 403
-[ ] ADMIN can GET /users/creators → 200
+[x] Unauth POST /api/marketplace/products → 401 (gateway)
+[x] FAN cannot POST /products → 403 (service)
+[x] CREATOR can POST /products → 201
+[x] CREATOR cannot PUT another creator's product → 403
+[x] Checkout uses JWT sub
+[x] ADMIN seed + /admin dashboard
+[x] Gateway JWT unit tests: npm test in api-gateway
 ```
 
----
-
-## Definition of done
-
-- [ ] All write APIs require valid JWT
-- [ ] Permission matrix fully enforced server-side
-- [ ] FEATURE_IMPLEMENTATION_AUDIT rows 3.6, 3.7, 3.8 marked ✅
-- [ ] No security-critical logic relies on frontend hiding alone
+Related: [FEATURE_IMPLEMENTATION_AUDIT.md](./FEATURE_IMPLEMENTATION_AUDIT.md) · [RUNBOOK.md](./RUNBOOK.md)

@@ -7,12 +7,13 @@ import { PrismaService } from '../prisma/prisma.module';
 import { EventPublisherService } from '../events/events.module';
 import { PaymentCompletionService } from '../payments/payment-completion.service';
 
-interface PaymentJobData {
+export interface PaymentJobData {
   orderId: string;
   invoiceNo: string;
   totalAmount: number;
   userId: string;
   userEmail: string;
+  correlationId?: string;
 }
 
 @Processor('payment-processing')
@@ -34,28 +35,45 @@ export class PaymentProcessor extends WorkerHost {
   }
 
   async process(job: Job<PaymentJobData>): Promise<void> {
-    const { orderId, invoiceNo, userId } = job.data;
+    const { orderId, invoiceNo, userId, correlationId } = job.data;
     this.logger.log(`Simulated payment processing for ${invoiceNo}`);
 
-    await this.prisma.order.update({
-      where: { id: orderId },
-      data: { status: OrderStatus.PROCESSING },
-    });
+    const order = await this.prisma.order.findUnique({ where: { id: orderId } });
+    if (!order) {
+      this.logger.warn(`Order ${orderId} not found`);
+      return;
+    }
 
-    await this.eventPublisher.publish('order.status_changed', {
-      userId,
-      orderId,
-      invoiceNo,
-      status: OrderStatus.PROCESSING,
-    });
+    if (order.status === OrderStatus.PAID || order.status === OrderStatus.FAILED) {
+      this.logger.log(`Order ${invoiceNo} already ${order.status}; skipping`);
+      return;
+    }
+
+    if (order.status !== OrderStatus.PROCESSING) {
+      await this.prisma.order.update({
+        where: { id: orderId },
+        data: { status: OrderStatus.PROCESSING },
+      });
+
+      await this.eventPublisher.publish(
+        'order.status_changed',
+        {
+          userId,
+          orderId,
+          invoiceNo,
+          status: OrderStatus.PROCESSING,
+        },
+        correlationId,
+      );
+    }
 
     await new Promise((resolve) => setTimeout(resolve, this.simulationDelay));
 
     const paymentSuccess = Math.random() > 0.05;
     if (paymentSuccess) {
-      await this.completion.markPaid(orderId);
+      await this.completion.markPaid(orderId, { correlationId });
     } else {
-      await this.completion.markFailed(orderId);
+      await this.completion.markFailed(orderId, { correlationId });
       this.logger.warn(`Simulated payment failed for ${invoiceNo}`);
     }
   }

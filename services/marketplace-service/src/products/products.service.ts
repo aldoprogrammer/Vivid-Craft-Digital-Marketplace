@@ -40,6 +40,7 @@ export class ProductsService {
       tags: product.tags ?? [],
       isPublished: product.isPublished,
       previewImageUrl: product.previewImageUrl,
+      watermarkedImagePath: product.watermarkedImagePath,
       favoriteCount: product.favoriteCount,
       createdAt: (product as ProductDocument & { createdAt?: Date }).createdAt?.toISOString?.(),
     };
@@ -188,6 +189,7 @@ export class ProductsService {
           tags: h.tags,
           isPublished: h.isPublished,
           previewImageUrl: h.previewImageUrl,
+          watermarkedImagePath: h.watermarkedImagePath,
           favoriteCount: h.favoriteCount ?? 0,
           createdAt: h.createdAt,
         }));

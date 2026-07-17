@@ -8,12 +8,16 @@ import morgan from 'morgan';
 import swaggerUi from 'swagger-ui-express';
 import { swaggerSpec } from './swagger-spec';
 import { resolveServiceUrl, registerWithConsul } from './consul/register';
+import { correlationMiddleware } from './middleware/correlation.middleware';
+import { createJwtMiddleware, resolveJwtSecret } from './middleware/jwt.middleware';
+import { metricsHandler, metricsMiddleware } from './middleware/metrics.middleware';
 
 dotenv.config();
 
 async function bootstrap() {
   const app = express();
   const PORT = parseInt(process.env.PORT || '3000', 10);
+  const jwtSecret = resolveJwtSecret();
 
   const AUTH_SERVICE_URL = await resolveServiceUrl(
     'auth-service',
@@ -44,7 +48,9 @@ async function bootstrap() {
     }),
   );
   app.use(cors({ origin: true, credentials: true }));
+  app.use(correlationMiddleware);
   app.use(morgan('dev'));
+  app.use(metricsMiddleware);
 
   const isDev = process.env.NODE_ENV !== 'production';
   const rateLimitMax = parseInt(
@@ -61,17 +67,45 @@ async function bootstrap() {
       message: { statusCode: 429, message: 'Too many requests, please try again later.' },
       skip: (req) =>
         req.path === '/health' ||
+        req.path.startsWith('/health/') ||
+        req.path === '/metrics' ||
         req.path.includes('/notifications/stream') ||
         req.path.startsWith('/api/docs'),
     });
     app.use(limiter);
   }
 
+  app.use(createJwtMiddleware(jwtSecret));
+
   app.get('/health', (_req, res) => {
     res.json({ status: 'ok', service: 'api-gateway', timestamp: new Date().toISOString() });
   });
+  app.get('/health/live', (_req, res) => {
+    res.json({ status: 'ok', service: 'api-gateway', check: 'live' });
+  });
+  app.get('/health/ready', (_req, res) => {
+    res.json({
+      status: 'ok',
+      service: 'api-gateway',
+      check: 'ready',
+      upstreams: {
+        auth: AUTH_SERVICE_URL,
+        marketplace: MARKETPLACE_SERVICE_URL,
+        transaction: TRANSACTION_SERVICE_URL,
+        images: IMAGE_PROCESSOR_URL,
+      },
+    });
+  });
+  app.get('/metrics', metricsHandler);
 
   app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+
+  const sendUpstreamUnavailable = (target: string, err: Error, res: express.Response | import('net').Socket) => {
+    console.error(`Proxy error to ${target}:`, err.message);
+    if ('headersSent' in res && !res.headersSent && 'status' in res) {
+      res.status(502).json({ statusCode: 502, message: 'Upstream service unavailable' });
+    }
+  };
 
   const proxyOptions = (target: string, stripPrefix: string) => ({
     target,
@@ -80,17 +114,30 @@ async function bootstrap() {
     proxyTimeout: 0,
     timeout: 0,
     on: {
-      proxyRes: (proxyRes: express.IncomingMessage, req: express.Request) => {
-        if (req.path.includes('/notifications/stream')) {
-          proxyRes.headers['x-accel-buffering'] = 'no';
-          proxyRes.headers['cache-control'] = 'no-cache';
+      proxyReq: (proxyReq: import('http').ClientRequest, req: express.Request) => {
+        const correlationId = req.headers['x-correlation-id'];
+        if (typeof correlationId === 'string') {
+          proxyReq.setHeader('x-correlation-id', correlationId);
+        }
+        if (req.headers['x-user-id']) {
+          proxyReq.setHeader('x-user-id', String(req.headers['x-user-id']));
+        }
+        if (req.headers['x-user-role']) {
+          proxyReq.setHeader('x-user-role', String(req.headers['x-user-role']));
+        }
+        if (req.headers['x-user-email']) {
+          proxyReq.setHeader('x-user-email', String(req.headers['x-user-email']));
         }
       },
-      error: (err: Error, _req: express.Request, res: express.Response) => {
-        console.error(`Proxy error to ${target}:`, err.message);
-        if (!res.headersSent) {
-          res.status(502).json({ statusCode: 502, message: 'Upstream service unavailable' });
+      proxyRes: (proxyRes: import('http').IncomingMessage, req: express.Request) => {
+        if (req.path.includes('/notifications/stream')) {
+          proxyRes.headers['x-accel-buffering'] = 'no';
+          proxyRes.headers['cache-control'] = 'no-cache, no-transform';
+          proxyRes.headers['connection'] = 'keep-alive';
         }
+      },
+      error: (err: Error, _req: express.Request, res: express.Response | import('net').Socket) => {
+        sendUpstreamUnavailable(target, err, res);
       },
     },
   });
@@ -102,11 +149,14 @@ async function bootstrap() {
       changeOrigin: true,
       pathRewrite: (path) => `/auth${path}`,
       on: {
-        error: (err: Error, _req: express.Request, res: express.Response) => {
-          console.error(`Proxy error to ${AUTH_SERVICE_URL}:`, err.message);
-          if (!res.headersSent) {
-            res.status(502).json({ statusCode: 502, message: 'Upstream service unavailable' });
+        proxyReq: (proxyReq, req) => {
+          const correlationId = req.headers['x-correlation-id'];
+          if (typeof correlationId === 'string') {
+            proxyReq.setHeader('x-correlation-id', correlationId);
           }
+        },
+        error: (err: Error, _req: express.Request, res: express.Response | import('net').Socket) => {
+          sendUpstreamUnavailable(AUTH_SERVICE_URL, err, res);
         },
       },
     }),
@@ -124,11 +174,17 @@ async function bootstrap() {
       proxyTimeout: 0,
       timeout: 0,
       on: {
-        error: (err: Error, _req: express.Request, res: express.Response) => {
-          console.error(`Proxy error to ${AUTH_SERVICE_URL}:`, err.message);
-          if (!res.headersSent) {
-            res.status(502).json({ statusCode: 502, message: 'Upstream service unavailable' });
+        proxyReq: (proxyReq, req) => {
+          const correlationId = req.headers['x-correlation-id'];
+          if (typeof correlationId === 'string') {
+            proxyReq.setHeader('x-correlation-id', correlationId);
           }
+          if (req.headers['x-user-id']) {
+            proxyReq.setHeader('x-user-id', String(req.headers['x-user-id']));
+          }
+        },
+        error: (err: Error, _req: express.Request, res: express.Response | import('net').Socket) => {
+          sendUpstreamUnavailable(AUTH_SERVICE_URL, err, res);
         },
       },
     }),
@@ -146,7 +202,7 @@ async function bootstrap() {
   app.listen(PORT, '0.0.0.0', async () => {
     console.log(`VividCraft API Gateway running on port ${PORT}`);
     console.log(`Swagger docs available at http://localhost:${PORT}/api/docs`);
-    await registerWithConsul({ name: 'api-gateway', port: PORT, healthPath: '/health' });
+    await registerWithConsul({ name: 'api-gateway', port: PORT, healthPath: '/health/ready' });
   });
 }
 

@@ -164,6 +164,7 @@ export function MarketplacePage() {
                 price={product.price}
                 creatorName={product.creatorName}
                 previewImageUrl={product.previewImageUrl}
+                isWatermarked={Boolean(product.watermarkedImagePath)}
                 index={index}
                 onAddToCart={() => handleAddToCart(product)}
                 onFavorite={() => handleFavorite(product._id, product.title)}

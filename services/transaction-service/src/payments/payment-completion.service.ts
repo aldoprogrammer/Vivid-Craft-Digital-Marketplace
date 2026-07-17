@@ -16,19 +16,27 @@ export class PaymentCompletionService {
     private mail: MailService,
   ) {}
 
-  async markPaid(orderId: string, extras?: { stripePaymentIntentId?: string; transactionId?: string }) {
+  async markPaid(
+    orderId: string,
+    extras?: {
+      stripePaymentIntentId?: string;
+      transactionId?: string;
+      correlationId?: string;
+    },
+  ) {
     const existing = await this.prisma.order.findUnique({
       where: { id: orderId },
       include: { payment: true },
     });
     if (!existing) return null;
-    if (existing.status === OrderStatus.PAID) return existing;
 
-    await this.prisma.$transaction(async (tx) => {
-      await tx.order.update({
-        where: { id: orderId },
+    const applied = await this.prisma.$transaction(async (tx) => {
+      const updated = await tx.order.updateMany({
+        where: { id: orderId, status: { not: OrderStatus.PAID } },
         data: { status: OrderStatus.PAID },
       });
+      if (updated.count === 0) return false;
+
       await tx.payment.update({
         where: { orderId },
         data: {
@@ -41,16 +49,28 @@ export class PaymentCompletionService {
         },
       });
       await tx.purchaseLock.deleteMany({ where: { orderId } });
+      return true;
     });
+
+    if (!applied) {
+      return this.prisma.order.findUnique({
+        where: { id: orderId },
+        include: { payment: true },
+      });
+    }
 
     await this.purchasesService.ensureDeliveriesForPaidOrder(orderId);
 
-    await this.eventPublisher.publish('order.status_changed', {
-      userId: existing.userId,
-      orderId,
-      invoiceNo: existing.invoiceNo,
-      status: OrderStatus.PAID,
-    });
+    await this.eventPublisher.publish(
+      'order.status_changed',
+      {
+        userId: existing.userId,
+        orderId,
+        invoiceNo: existing.invoiceNo,
+        status: OrderStatus.PAID,
+      },
+      extras?.correlationId,
+    );
 
     await this.mail.sendPaymentReceipt({
       to: existing.userEmail,
@@ -63,27 +83,39 @@ export class PaymentCompletionService {
     return this.prisma.order.findUnique({ where: { id: orderId }, include: { payment: true } });
   }
 
-  async markFailed(orderId: string) {
+  async markFailed(orderId: string, extras?: { correlationId?: string }) {
     const existing = await this.prisma.order.findUnique({ where: { id: orderId } });
-    if (!existing || existing.status === OrderStatus.PAID) return;
+    if (!existing) return;
 
-    await this.prisma.$transaction(async (tx) => {
-      await tx.order.update({
-        where: { id: orderId },
+    const applied = await this.prisma.$transaction(async (tx) => {
+      const updated = await tx.order.updateMany({
+        where: {
+          id: orderId,
+          status: { notIn: [OrderStatus.PAID, OrderStatus.FAILED] },
+        },
         data: { status: OrderStatus.FAILED },
       });
+      if (updated.count === 0) return false;
+
       await tx.payment.update({
         where: { orderId },
         data: { status: PaymentStatus.FAILED, processedAt: new Date() },
       });
       await tx.purchaseLock.deleteMany({ where: { orderId } });
+      return true;
     });
 
-    await this.eventPublisher.publish('order.status_changed', {
-      userId: existing.userId,
-      orderId,
-      invoiceNo: existing.invoiceNo,
-      status: OrderStatus.FAILED,
-    });
+    if (!applied) return;
+
+    await this.eventPublisher.publish(
+      'order.status_changed',
+      {
+        userId: existing.userId,
+        orderId,
+        invoiceNo: existing.invoiceNo,
+        status: OrderStatus.FAILED,
+      },
+      extras?.correlationId,
+    );
   }
 }
