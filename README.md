@@ -2,9 +2,13 @@
 
 Digital art & comic marketplace built as microservices. Creators list comics, art, and assets. Fans browse, add to cart, and checkout via **Stripe** (international cards) or **Xendit** (SEA local payments).
 
-https://youtu.be/TWGRvFVJJGw
+### Demo
+<a href="https://youtu.be/TWGRvFVJJGw" target="_blank" rel="noopener noreferrer">
+  <img src="https://img.youtube.com/vi/TWGRvFVJJGw/maxresdefault.jpg" alt="VividCraft Demo Video" />
+</a>
 
-→ [Platform preview (screenshots)](docs/preview/PLATFORM_PREVIEW.md)
+### Screenshots & UI preview
+Full gallery (marketplace, orders, Docker, Prisma, codebase): **[docs/preview/PLATFORM_PREVIEW.md](docs/preview/PLATFORM_PREVIEW.md)**
 
 ## What's inside
 
