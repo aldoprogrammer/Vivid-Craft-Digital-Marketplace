@@ -8,6 +8,7 @@ Planning, audit, and execution guides for the platform.
 
 | Doc | When to use |
 |-----|-------------|
+| **[preview/PLATFORM_PREVIEW.md](./preview/PLATFORM_PREVIEW.md)** | **UI & infra screenshots** — portfolio / reviewer preview |
 | **[FEATURE_IMPLEMENTATION_AUDIT.md](./FEATURE_IMPLEMENTATION_AUDIT.md)** | Check what is **real** vs **mock** — run before every sprint review |
 | [CURRENT_STATE.md](./CURRENT_STATE.md) | Quick snapshot of Redis, queues, SSE, RBAC today |
 | [FEATURE_ROADMAP.md](./FEATURE_ROADMAP.md) | Prioritized backlog (P0 → P3) |

@@ -9,6 +9,7 @@
     "start:prod": "node dist/main",
     "prisma:generate": "prisma generate",
     "prisma:push": "prisma db push",
+    "prisma:studio": "prisma studio --port 5555 --hostname 0.0.0.0",
     "prisma:seed": "ts-node prisma/seed.ts"
   },
   "prisma": {

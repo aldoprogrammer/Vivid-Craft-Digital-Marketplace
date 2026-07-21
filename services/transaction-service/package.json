@@ -8,7 +8,8 @@
     "start:dev": "nest start --watch",
     "start:prod": "node dist/main",
     "prisma:generate": "prisma generate",
-    "prisma:push": "prisma db push"
+    "prisma:push": "prisma db push",
+    "prisma:studio": "prisma studio --port 5556 --hostname 0.0.0.0"
   },
   "dependencies": {
     "@nestjs/bullmq": "^10.2.3",

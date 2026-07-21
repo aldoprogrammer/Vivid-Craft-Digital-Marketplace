@@ -2,6 +2,22 @@
 
 Digital art & comic marketplace built as microservices. Creators list comics, art, and assets. Fans browse, add to cart, and checkout via **Stripe** (international cards) or **Xendit** (SEA local payments).
 
+### Demo video
+
+**YouTube:** [VividCraft platform walkthrough](https://youtu.be/TWGRvFVJJGw) 
+
+### Screenshots & UI preview
+
+Full gallery (marketplace, orders, Docker, Prisma, codebase): **[docs/preview/PLATFORM_PREVIEW.md](docs/preview/PLATFORM_PREVIEW.md)**
+
+| Preview | Link |
+|---------|------|
+| Marketplace + live notifications | [04-marketplace-notifications.png](docs/preview/04-marketplace-notifications.png) |
+| My Orders (filters + table) | [05-orders-table-filters.png](docs/preview/05-orders-table-filters.png) |
+| Microservices monorepo | [01-codebase-structure.png](docs/preview/01-codebase-structure.png) |
+| Docker Compose stack | [02-docker-containers.png](docs/preview/02-docker-containers.png) |
+| Prisma Studio (order items) | [03-prisma-studio-order-items.png](docs/preview/03-prisma-studio-order-items.png) |
+
 ## What's inside
 
 | Part | Tech | Port |
@@ -15,6 +31,9 @@ Digital art & comic marketplace built as microservices. Creators list comics, ar
 | PostgreSQL | User & payment data | 5432 |
 | MongoDB | Product catalog | 27017 |
 | Redis | Cache & job queue | 6379 |
+| Redis Commander (dev UI) | Browse Redis keys | 8081 |
+| Prisma Studio — auth DB | PostgreSQL tables (users) | 5555 |
+| Prisma Studio — transactions DB | PostgreSQL tables (orders, payments) | 5556 |
 | Mailpit | Dev SMTP inbox | 8025 / 1025 |
 | Elasticsearch | Product full-text search | 9200 |
 | Consul | Service registry | 8500 |
@@ -77,6 +96,9 @@ Digital art & comic marketplace built as microservices. Creators list comics, ar
 4. **Open the app**
    - Website: http://localhost:5173
    - API health: http://localhost:3000/health/ready
+   - **Redis UI:** http://localhost:8081 (not `6379` — that port is Redis protocol, not HTTP)
+   - **Prisma Studio (auth):** http://localhost:5555
+   - **Prisma Studio (orders/payments):** http://localhost:5556
    - Metrics: http://localhost:3000/metrics
    - Mailpit: http://localhost:8025
    - Consul UI: http://localhost:8500
@@ -266,6 +288,16 @@ API Gateway Helmet was blocking cross-origin images (`localhost:5173` → `local
 docker compose restart api-gateway
 ```
 Hard-refresh the browser (`Ctrl+Shift+R`).
+
+### `Cannot GET /` on Redis or a service port
+
+| URL | Expected |
+|-----|----------|
+| `localhost:6379` | **Not a browser URL** — Redis binary protocol only. Use http://localhost:8081 |
+| `localhost:3001`–`3003` | NestJS APIs — no `/` route. Use `/health/ready` or Prisma Studio above |
+| `localhost:5555` / `5556` | Prisma Studio table browser |
+
+Start dev UIs: `docker compose up -d redis-commander prisma-studio-auth prisma-studio-transaction`
 
 ### MongoDB / Postgres log spam in terminal
 Harmless. Docker health checks ping the databases every few seconds.

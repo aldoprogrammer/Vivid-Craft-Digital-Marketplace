@@ -50,6 +50,56 @@ services:
       timeout: 5s
       retries: 10
 
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: vividcraft-redis-commander
+    restart: unless-stopped
+    environment:
+      REDIS_HOSTS: local:redis:6379
+    ports:
+      - "8081:8081"
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  prisma-studio-auth:
+    image: node:20-alpine
+    container_name: vividcraft-prisma-studio-auth
+    restart: unless-stopped
+    working_dir: /app
+    command: sh -c "npm exec -- prisma studio --port 5555 --hostname 0.0.0.0 --browser none"
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-vividcraft}:${POSTGRES_PASSWORD:-vividcraft_secret}@postgres:5432/${POSTGRES_DB:-vividcraft_auth}?schema=public
+    ports:
+      - "5555:5555"
+    volumes:
+      - ./services/auth-service:/app
+      - auth_node_modules:/app/node_modules
+    depends_on:
+      postgres:
+        condition: service_healthy
+      auth-service:
+        condition: service_started
+
+  prisma-studio-transaction:
+    image: node:20-alpine
+    container_name: vividcraft-prisma-studio-transaction
+    restart: unless-stopped
+    working_dir: /app
+    command: sh -c "npm exec -- prisma studio --port 5556 --hostname 0.0.0.0 --browser none"
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-vividcraft}:${POSTGRES_PASSWORD:-vividcraft_secret}@postgres:5432/${POSTGRES_TRANSACTION_DB:-vividcraft_transactions}?schema=public
+    ports:
+      - "5556:5556"
+    volumes:
+      - ./services/transaction-service:/app
+      - transaction_node_modules:/app/node_modules
+    depends_on:
+      postgres:
+        condition: service_healthy
+      transaction-service:
+        condition: service_started
+
   mailpit:
     image: axllent/mailpit:latest
     container_name: vividcraft-mailpit
