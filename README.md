@@ -1,6 +1,6 @@
 # VividCraft
 
-Digital art & comic marketplace built as microservices. Creators list comics, art, and assets. Fans browse, add to cart, and checkout.
+Digital art & comic marketplace built as microservices. Creators list comics, art, and assets. Fans browse, add to cart, and checkout via **Stripe** (international cards) or **Xendit** (SEA local payments).
 
 ## What's inside
 
