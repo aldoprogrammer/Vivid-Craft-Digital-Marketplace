@@ -5,7 +5,7 @@ import {
   useProducts,
   useToggleFavorite,
 } from '@/hooks/useApi';
-import { useCartStore } from '@/stores/cartStore';
+import { useAddToCart } from '@/hooks/useAddToCart';
 import { useAuthStore } from '@/stores/authStore';
 import { ProductCard, ProductCardSkeleton } from '@/components/ProductCard';
 import { EmptyState } from '@/components/EmptyState';
@@ -37,7 +37,7 @@ export function MarketplacePage() {
   );
   const ownedSet = new Set(ownedIds);
   const toggleFavorite = useToggleFavorite();
-  const addItem = useCartStore((s) => s.addItem);
+  const addToCart = useAddToCart();
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -54,14 +54,16 @@ export function MarketplacePage() {
       notify.error('You already own this product');
       return;
     }
-    addItem({
-      productId: product._id,
-      productName: product.title,
-      productType: product.type,
-      price: product.price,
-      quantity: 1,
-    });
-    notify.success(`"${product.title}" added to cart`);
+    addToCart(
+      {
+        productId: product._id,
+        productName: product.title,
+        productType: product.type,
+        price: product.price,
+        quantity: 1,
+      },
+      product.title,
+    );
   };
 
   const handleFavorite = async (productId: string, title: string) => {
@@ -167,6 +169,7 @@ export function MarketplacePage() {
                 isWatermarked={Boolean(product.watermarkedImagePath)}
                 index={index}
                 onAddToCart={() => handleAddToCart(product)}
+                addToCartLabel={isAuthenticated ? 'Add to Cart' : 'Sign in to buy'}
                 onFavorite={() => handleFavorite(product._id, product.title)}
                 isFavorite={favoriteIds.includes(product._id)}
                 favoriteCount={product.favoriteCount ?? 0}

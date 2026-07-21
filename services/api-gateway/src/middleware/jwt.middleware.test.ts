@@ -26,6 +26,7 @@ check('GET', '/api/transactions/notifications/stream', true);
 check('GET', '/api/transactions/notifications', false);
 check('GET', '/api/transactions/reviews/product/p1', true);
 check('POST', '/api/transactions/webhooks/stripe', true);
+check('POST', '/api/transactions/webhooks/xendit', true);
 check('GET', '/api/transactions/profile/u1/library', true);
 check('GET', '/api/transactions/orders', false);
 

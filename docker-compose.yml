@@ -186,6 +186,12 @@ services:
       STRIPE_CURRENCY: ${STRIPE_CURRENCY:-usd}
       STRIPE_SUCCESS_URL: ${STRIPE_SUCCESS_URL:-http://localhost:5173/orders?paid=1}
       STRIPE_CANCEL_URL: ${STRIPE_CANCEL_URL:-http://localhost:5173/cart?cancelled=1}
+      USD_TO_IDR: ${USD_TO_IDR:-16000}
+      XENDIT_SECRET_KEY: ${XENDIT_SECRET_KEY:-}
+      XENDIT_WEBHOOK_TOKEN: ${XENDIT_WEBHOOK_TOKEN:-}
+      XENDIT_CURRENCY: ${XENDIT_CURRENCY:-usd}
+      XENDIT_SUCCESS_URL: ${XENDIT_SUCCESS_URL:-http://localhost:5173/orders?paid=1}
+      XENDIT_CANCEL_URL: ${XENDIT_CANCEL_URL:-http://localhost:5173/cart?cancelled=1}
       CONSUL_HOST: consul
       SERVICE_ADDRESS: transaction-service
     ports:

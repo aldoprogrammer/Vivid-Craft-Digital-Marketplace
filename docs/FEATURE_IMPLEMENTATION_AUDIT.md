@@ -1,7 +1,7 @@
 # Feature Implementation Audit
 
 Use this doc to verify whether each planned feature is **real**, **partial**, or **mock**.  
-**Last verified:** 2026-07-17
+**Last verified:** 2026-07-21
 
 **Legend**
 
@@ -14,7 +14,7 @@ Use this doc to verify whether each planned feature is **real**, **partial**, or
 
 ---
 
-## Quick summary (as of 2026-07-17)
+## Quick summary (as of 2026-07-21)
 
 | Area | Real | Partial | Missing |
 | ---- | ---- | ------- | ------- |
@@ -22,9 +22,10 @@ Use this doc to verify whether each planned feature is **real**, **partial**, or
 | Auth | JWT, refresh, profiles, admin, **gateway JWT** | — | OAuth (⛔) |
 | Marketplace | CRUD, favorites, ES, SCAN cache invalidation | — | — |
 | Image processor | Watermark, assets, metrics, ready check | — | — |
-| Transactions | Checkout, Stripe optional, DLQ, notifications, reviews | Stripe E2E verification | — |
-| Frontend | Full flows + inbox + 403 toast + live favs | — | — |
+| Transactions | Stripe + Xendit checkout, confirm/resume/abandon, DLQ, notifications | Live FX API | — |
+| Frontend | Checkout page, orders table/filters/pagination, inbox, 403 toast | — | — |
 | Real-time | Pub/Sub + Stream + SSE replay + idempotency | — | — |
+| Testing | Vitest (web), node assert (gateway), Playwright E2E smoke | CI wiring | Full checkout E2E |
 
 ---
 
@@ -35,7 +36,7 @@ Use this doc to verify whether each planned feature is **real**, **partial**, or
 | 1.1 | Docker Compose | ✅ | `docker-compose.yml` | + Mailpit, ES, Consul |
 | 1.2 | Hot reload | ✅ | volumes | — |
 | 1.3 | API Gateway | ✅ | `api-gateway/src/index.ts` | Consul resolve + JWT + correlation |
-| 1.4 | Rate limiting | ✅ | express-rate-limit | SSE skipped; dev 2000 |
+| 1.4 | Rate limiting | ✅ | express-rate-limit | SSE skipped; dev `0` disables |
 | 1.5 | Swagger | ✅ | `/api/docs` | — |
 | 1.6 | Consul | ✅ | register + resolve | healthPath `/health/ready` |
 | 1.7–1.9 | Postgres / Mongo / Redis | ✅ | compose | — |
@@ -51,7 +52,7 @@ Use this doc to verify whether each planned feature is **real**, **partial**, or
 | # | Feature | Status | Evidence | Notes |
 |---|---------|--------|----------|-------|
 | 2.1–2.2 | Catalog cache | ✅ | redis module | **SCAN** invalidation (not KEYS) |
-| 2.3 | BullMQ payments | ✅ | payment.processor | Deterministic jobId |
+| 2.3 | BullMQ payments | ✅ | payment.processor | jobId `payment-{orderId}` |
 | 2.4 | Delivery on PAID | ✅ | purchases | — |
 | 2.5 | Redis Pub/Sub | ✅ | events.module | + Stream XADD |
 | 2.6 | SSE stream | ✅ | notifications | id/retry/Last-Event-ID replay |
@@ -102,6 +103,11 @@ Use this doc to verify whether each planned feature is **real**, **partial**, or
 | 6.1–6.14 | Checkout → notifications | ✅ | Atomic markPaid/Failed |
 | 6.15 | Stripe webhook idempotency | ✅ | StripeWebhookEvent table |
 | 6.16 | Payment DLQ replay | ✅ | `POST /payments/dlq/:jobId/replay` ADMIN |
+| 6.17 | Xendit invoices + webhook | ✅ | `POST /webhooks/xendit` |
+| 6.18 | Checkout options API | ✅ | `GET /checkout/options` |
+| 6.19 | Confirm / resume / abandon | ✅ | `POST /checkout/:orderId/{confirm,resume,abandon}` |
+| 6.20 | Dual provider UI | ✅ | Xendit (SEA) + Stripe (international) on `/checkout` |
+| 6.21 | Owned IDs exclude PENDING | ✅ | PAID + deliveries only |
 
 ---
 
@@ -112,13 +118,29 @@ Use this doc to verify whether each planned feature is **real**, **partial**, or
 | 7.1–7.22 | Core + inbox + live favs | ✅ | — |
 | 7.23 | SSE reconnect + refresh | ✅ | useSseNotifications |
 | 7.24 | Truthful Protected badge | ✅ | watermarkedImagePath |
+| 7.25 | Orders table + filters + pagination | ✅ | 10/page; status tabs |
+| 7.26 | Cart requires login | ✅ | useAddToCart |
+| 7.27 | Friendly API error toasts | ✅ | lib/errors.ts |
+
+---
+
+## 8. Automated testing
+
+| # | Feature | Status | Notes |
+|---|---------|--------|-------|
+| 8.1 | Gateway JWT unit tests | ✅ | `npm run test:gateway` |
+| 8.2 | Redis SCAN unit tests | ✅ | `npm run test:scan` |
+| 8.3 | Web-client Vitest | ✅ | orders, money helpers |
+| 8.4 | Playwright E2E smoke | ✅ | `tests/e2e/smoke.spec.ts` |
+| 8.5 | Agent testing skill | ✅ | `.cursor/skills/automation-testing/` |
+| 8.6 | CI pipeline for tests | ❌ | Manual / local only |
 
 ---
 
 ## Audit checklist
 
 ```
-Sprint: 2026-07-17
+Sprint: 2026-07-21
 
 [x] Gateway JWT blocks unauth writes; public catalog still open
 [x] Protected badge only when watermarkedImagePath present
@@ -127,11 +149,13 @@ Sprint: 2026-07-17
 [x] Payment DLQ + correlation IDs
 [x] /health/ready returns 503 on dep failure
 [x] Observability compose + RUNBOOK
-[x] Synthetic + k6 scripts present
-[x] Stripe sandbox test procedure documented (including `4242 4242 4242 4242`)
-[x] `STRIPE_SECRET_KEY` configured locally (reported 2026-07-17; secret not recorded)
-[ ] `STRIPE_WEBHOOK_SECRET` configured from active Stripe CLI listener
-[ ] Stripe sandbox E2E verified: PAID + Library + notification + Mailpit
+[x] Vitest + Playwright + automation-testing skill
+[x] Stripe + Xendit checkout; confirm/resume/abandon APIs
+[x] Orders table with filters and pagination
+[x] Dev rate limit disabled (RATE_LIMIT_MAX_REQUESTS=0)
+[ ] Stripe sandbox E2E verified end-to-end with active CLI webhook
+[ ] Xendit sandbox E2E verified with test invoice
+[ ] CI runs npm run test:unit on PR
 [ ] Production backup/restore (out of local scope)
 ```
 

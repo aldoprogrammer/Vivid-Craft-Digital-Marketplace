@@ -34,8 +34,8 @@ Digital art & comic marketplace built as microservices. Creators list comics, ar
 | Auth (register/login) | `auth-service` | Login, Register pages |
 | Product catalog | `marketplace-service` + MongoDB + Redis | Marketplace with search/filter |
 | Image watermark | `image-processor` (Flask) → `marketplace-service` | Creator Dashboard image upload |
-| Checkout & payments | `transaction-service` + BullMQ | Cart checkout |
-| Order history | `transaction-service` | My Orders page |
+| Checkout & payments | `transaction-service` + Stripe/Xendit | `/checkout` page → provider redirect |
+| Order history | `transaction-service` | My Orders (table, filters, pagination) |
 | Notifications (SSE + inbox) | `transaction-service` | Navbar bell dropdown |
 | API routing | `api-gateway` | All requests via `VITE_API_URL` |
 
@@ -45,7 +45,11 @@ Digital art & comic marketplace built as microservices. Creators list comics, ar
 
 **Security:** Gateway JWT pre-check (public catalog/auth/SSE whitelist) + per-service RBAC. Shared `JWT_SECRET`.
 
-**Rate limiting:** Gateway skips SSE. Dev default 2000/15min.
+**Checkout flow:** Cart → `/checkout` → pick **Xendit** (SEA/local) or **Stripe** (international) → redirect to provider → return to `/orders?paid=1` → confirm with provider API → Library on **PAID**. Unpaid orders can **Complete payment** or **Cancel** from My Orders.
+
+**Payment providers:** Stripe (USD catalog charge) and Xendit (IDR via `USD_TO_IDR`). Webhooks: `POST /api/transactions/webhooks/stripe` and `/xendit`. Local dev often needs `POST /checkout/:orderId/confirm` when webhooks cannot reach localhost.
+
+**Rate limiting:** Gateway skips SSE. Dev default **`RATE_LIMIT_MAX_REQUESTS=0`** (disabled) in `services/api-gateway/.env.example`.
 
 **Observability:** `npm run dev:obs` → Prometheus :9090, Grafana :3005 (`admin`/`admin`), Alertmanager :9093, Loki. Runbook: [docs/RUNBOOK.md](docs/RUNBOOK.md).
 
@@ -78,22 +82,24 @@ Digital art & comic marketplace built as microservices. Creators list comics, ar
    - Consul UI: http://localhost:8500
    - Observability: `npm run dev:obs` → Grafana http://localhost:3005
    - Admin seed (after `npm run prisma:seed` in auth-service): `admin@vividcraft.local` / `AdminPass123!`
-   - Stripe (optional): set `STRIPE_SECRET_KEY` + `STRIPE_WEBHOOK_SECRET`; else simulated
+   - Stripe (optional): set keys in root `.env` (see `.env.example`)
+   - Xendit (optional): set `XENDIT_SECRET_KEY` + `XENDIT_WEBHOOK_TOKEN` in root `.env`
    - API docs: http://localhost:3000/api/docs
+   - Tests: `npm run test:unit` · `npm run test:e2e` (Docker up)
    - Synthetic: `node tests/synthetic/checkout-flow.js`
 
 ### Stripe sandbox test
 
-1. Set `STRIPE_SECRET_KEY` in `services/transaction-service/.env`.
+1. Set `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` in root `.env` (passed via `docker-compose.yml`).
 2. Start the webhook forwarder:
    ```bash
    stripe login
    stripe listen --forward-to localhost:3000/api/transactions/webhooks/stripe
    ```
-3. Copy the generated `whsec_...` into `STRIPE_WEBHOOK_SECRET`.
-4. Restart:
+3. Copy the generated `whsec_...` into root `.env` as `STRIPE_WEBHOOK_SECRET`.
+4. Recreate transaction-service (required after `.env` changes — `restart` alone does not reload env):
    ```bash
-   docker compose restart transaction-service
+   docker compose up -d transaction-service
    ```
 5. Checkout with:
    ```text
@@ -103,6 +109,13 @@ Digital art & comic marketplace built as microservices. Creators list comics, ar
    Postal code: any valid value
    ```
 6. Verify the order becomes **PAID**, Library delivery appears, the notification arrives, and Mailpit receives the receipt.
+
+### Xendit sandbox test
+
+1. Set `XENDIT_SECRET_KEY` and `XENDIT_WEBHOOK_TOKEN` in root `.env`.
+2. Recreate: `docker compose up -d transaction-service`
+3. Checkout with **Xendit** selected → complete payment on Xendit test invoice.
+4. Return to `/orders?paid=1` or click **Complete payment** if status is still pending.
 
 ## Useful commands
 
@@ -117,6 +130,11 @@ Digital art & comic marketplace built as microservices. Creators list comics, ar
 | `npm run dev:down` | Stop all containers |
 | `npm run dev:logs` | Follow logs (use after detached start) |
 | `npm run dev:clean` | Stop and remove volumes (fresh database) |
+| `npm run test:unit` | Gateway JWT + Redis scan + web-client Vitest |
+| `npm run test:e2e` | Playwright smoke (requires Docker stack) |
+| `npm run test` | Unit + E2E |
+
+Agent testing guide: [.cursor/skills/automation-testing/SKILL.md](.cursor/skills/automation-testing/SKILL.md)
 
 ### Docker CLI
 
@@ -161,7 +179,13 @@ docker compose logs marketplace-service --tail 50
 1. Open http://localhost:5173
 2. **Register** — choose Fan (buyer) or Creator (seller)
 3. **Creators** — go to Creator Dashboard and publish a listing
-4. **Fans** — browse marketplace, add items to cart, checkout
+4. **Fans** — browse marketplace, add items to cart, go to **Checkout**, pay via Xendit or Stripe
+
+## My Orders
+
+- Table view with filters: **All · Awaiting payment · Paid · Cancelled · Refunded**
+- Pagination: 10 orders per page
+- Expand row / **Details** for line items, qty, invoice, and payment actions
 
 ## API examples
 
@@ -230,11 +254,11 @@ Get-ChildItem -Recurse -Filter "*.sh" | ForEach-Object {
 ```
 
 ### `429 Too many requests`
-Gateway rate limit hit. SSE reconnects used to count against the same bucket (now **SSE path is skipped**). Fix:
+Gateway rate limit hit (common during heavy dev refresh). Fix:
 ```bash
-docker compose restart api-gateway
+docker compose up -d api-gateway
 ```
-Wait ~15 min if the old window is still active, or set `RATE_LIMIT_MAX_REQUESTS=2000` (dev) in `services/api-gateway/.env.example`.
+Dev default disables limiting: `RATE_LIMIT_MAX_REQUESTS=0` in `services/api-gateway/.env.example`.
 
 ### Broken product images on marketplace
 API Gateway Helmet was blocking cross-origin images (`localhost:5173` → `localhost:3000`). Fixed via `crossOriginResourcePolicy: cross-origin`. If images still break after a code change:

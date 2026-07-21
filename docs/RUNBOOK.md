@@ -24,8 +24,11 @@ Health endpoints per service: `/health/live`, `/health/ready`, `/health` (alias 
 # Bring up app + observability together
 docker compose -f docker-compose.yml -f docker-compose.observability.yml up -d
 
-# Restart a single service
+# Restart a single service (env vars unchanged)
 docker compose restart transaction-service
+
+# Recreate after .env / payment key changes (reloads compose environment)
+docker compose up -d transaction-service api-gateway
 
 # Tail logs
 docker compose logs -f transaction-service
@@ -45,9 +48,9 @@ docker compose -f docker-compose.yml -f docker-compose.observability.yml down
 
 1. Confirm source: `docker compose logs -f api-gateway` and Grafana request-rate panel by `route`.
 2. Check limiter config in `services/api-gateway/src/index.ts` (`RATE_LIMIT_MAX_REQUESTS`, `RATE_LIMIT_WINDOW_MS`).
-3. If legitimate traffic spike: raise `RATE_LIMIT_MAX_REQUESTS` env and `docker compose up -d api-gateway`.
-4. If abuse: identify offending IP/token from gateway logs and block upstream.
-5. Health/metrics/SSE paths are already excluded from limiting — verify no new hot path needs exclusion.
+3. Dev default: `RATE_LIMIT_MAX_REQUESTS=0` in `services/api-gateway/.env.example` — recreate gateway: `docker compose up -d api-gateway`.
+4. If legitimate traffic spike in prod: raise `RATE_LIMIT_MAX_REQUESTS` and recreate gateway.
+5. Health/metrics/SSE paths are excluded — verify no new hot path needs exclusion.
 
 ## SEV-2: SSE notification disconnects
 
@@ -63,24 +66,25 @@ docker compose -f docker-compose.yml -f docker-compose.observability.yml down
 
 **Symptoms:** Orders remain pending; delivery queue not draining; buyers not receiving assets.
 
-1. Check transaction-service readiness (Prisma + Redis): `curl -s http://localhost:3003/health/ready | jq`.
-2. Verify Postgres: `docker compose exec postgres pg_isready`.
-3. Verify BullMQ/Redis (queue backend): `docker compose exec redis redis-cli ping` and inspect queue keys.
-4. Inspect Stripe webhook errors in logs: `docker compose logs transaction-service | grep -i stripe`.
-5. Check Mailpit (http://localhost:8025) for delivery emails; confirm SMTP to `mailpit:1025`.
-6. If queue is wedged: `docker compose restart transaction-service` (idempotency keys prevent double-processing).
-7. Escalate to SEV-1 comms if payments captured but goods undelivered.
+1. Check transaction-service readiness: `curl -s http://localhost:3003/health/ready | jq`.
+2. Confirm routes mapped in logs: `/checkout/:orderId/confirm`, `/resume`, `/abandon`.
+3. If route missing after code deploy: `docker compose up -d transaction-service` (watch mode may not reload).
+4. Local return from Stripe/Xendit without webhook: user lands on `/orders?paid=1` → frontend calls `POST /checkout/:orderId/confirm`.
+5. Unpaid order stuck: **Complete payment** on My Orders → `POST /checkout/:orderId/resume`.
+6. Verify Postgres + Redis; inspect Stripe/Xendit webhook logs.
+7. BullMQ simulated path only when no provider keys configured.
+8. Escalate if payment captured but goods undelivered.
 
 ## Stripe sandbox verification
 
-1. Put `STRIPE_SECRET_KEY` in `services/transaction-service/.env`.
+1. Put `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` in root `.env` (compose passes to transaction-service).
 2. Run:
    ```bash
    stripe login
    stripe listen --forward-to localhost:3000/api/transactions/webhooks/stripe
    ```
 3. Copy the printed `whsec_...` value into `STRIPE_WEBHOOK_SECRET`.
-4. Restart `transaction-service`.
+4. Recreate: `docker compose up -d transaction-service`.
 5. Complete checkout with:
    ```text
    Card: 4242 4242 4242 4242
@@ -96,7 +100,23 @@ docker compose -f docker-compose.yml -f docker-compose.observability.yml down
    - Notification arrives
    - Receipt appears in Mailpit
 
-Never commit `.env`, `sk_test_...`, or `whsec_...`.
+Never commit `.env`, `sk_test_...`, `whsec_...`, or Xendit secrets.
+
+## Xendit sandbox verification
+
+1. Set `XENDIT_SECRET_KEY` + `XENDIT_WEBHOOK_TOKEN` in root `.env`.
+2. `docker compose up -d transaction-service`
+3. Checkout → select **Xendit** → pay test invoice.
+4. Verify order **PAID** via webhook or `POST /checkout/:orderId/confirm`.
+
+## Automated tests
+
+```bash
+npm run test:unit          # gateway + scan + vitest
+npm run test:e2e           # Playwright smoke (stack must be up)
+```
+
+See `.cursor/skills/automation-testing/SKILL.md` for agent workflow.
 
 ## SEV-1: Redis down
 

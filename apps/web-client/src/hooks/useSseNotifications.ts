@@ -54,6 +54,7 @@ export function useSseNotifications(userId: string | undefined) {
     const invalidateOrders = () => {
       queryClient.invalidateQueries({ queryKey: ['orders', userId] });
       queryClient.invalidateQueries({ queryKey: ['purchases', userId] });
+      queryClient.invalidateQueries({ queryKey: ['owned-product-ids', userId] });
     };
 
     const refreshNotifications = () => {

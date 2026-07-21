@@ -1,6 +1,6 @@
 # Current Platform State
 
-**Last updated:** 2026-07-17 (gateway JWT, event hardening, observability)
+**Last updated:** 2026-07-21 (dual payment, checkout page, orders UI, automated tests)
 
 ---
 
@@ -49,12 +49,37 @@
 
 | Flow | Status |
 |------|--------|
-| Simulated BullMQ payment | ✅ |
-| Stripe Checkout + webhook idempotency | ✅ Implemented; secret key configured locally |
-| Stripe sandbox E2E | ⏳ Needs active CLI webhook secret and full verification |
+| Dedicated `/checkout` page (Xendit / Stripe picker) | ✅ |
+| Stripe Checkout + webhook idempotency | ✅ |
+| Xendit invoices + webhook | ✅ |
+| `POST /checkout/:orderId/confirm` (local return sync) | ✅ |
+| `POST /checkout/:orderId/resume` (re-open provider URL) | ✅ |
+| `POST /checkout/:orderId/abandon` (cancel unpaid) | ✅ |
+| Simulated BullMQ payment (no provider keys) | ✅ |
 | Payment DLQ + ADMIN replay | ✅ |
 | Library asset / license download | ✅ |
 | Mailpit receipt | ✅ |
+| Owned products = **PAID only** (PENDING not owned) | ✅ |
+
+### Frontend — orders
+
+| Feature | Status |
+|---------|--------|
+| Table layout | ✅ |
+| Status filters (All / Awaiting / Paid / Cancelled / Refunded) | ✅ |
+| Pagination (10 per page) | ✅ |
+| Expandable row details (items, qty, invoice) | ✅ |
+
+### Testing
+
+| Layer | Command |
+|-------|---------|
+| Gateway JWT unit | `npm run test:gateway` |
+| Redis SCAN unit | `npm run test:scan` |
+| Web-client Vitest (`orders`, `money`) | `npm run test:web` |
+| Playwright E2E smoke | `npm run test:e2e` |
+| All unit | `npm run test:unit` |
+| Agent skill | `.cursor/skills/automation-testing/SKILL.md` |
 
 ### Observability
 
@@ -74,15 +99,19 @@
 
 ---
 
-## Optional env
+## Optional env (root `.env` → docker-compose)
 
 | Env | Purpose |
 |-----|---------|
 | `JWT_SECRET` | Shared gateway + services (required in production) |
 | `STRIPE_SECRET_KEY` + `STRIPE_WEBHOOK_SECRET` | Stripe sandbox |
-| `RATE_LIMIT_MAX_REQUESTS` | Gateway limit (`0` disables) |
+| `XENDIT_SECRET_KEY` + `XENDIT_WEBHOOK_TOKEN` | Xendit sandbox |
+| `USD_TO_IDR` | FX for Xendit IDR charges (default 16000) |
+| `RATE_LIMIT_MAX_REQUESTS` | Gateway limit (`0` = disabled in dev) |
 
-Stripe sandbox steps and test card `4242 4242 4242 4242` are documented in the root README and [RUNBOOK.md](./RUNBOOK.md).
+After changing payment env vars, run `docker compose up -d transaction-service` (not `restart` alone).
+
+Stripe test card `4242 4242 4242 4242` — see [README.md](../README.md) and [RUNBOOK.md](./RUNBOOK.md).
 
 ---
 
@@ -91,6 +120,8 @@ Stripe sandbox steps and test card `4242 4242 4242 4242` are documented in the r
 ```bash
 npm run dev
 npm run dev:obs
+npm run test:unit
+npm run test:e2e
 curl http://localhost:3000/health/ready
 curl http://localhost:3000/metrics
 node tests/synthetic/checkout-flow.js

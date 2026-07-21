@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue, QueueEvents } from 'bullmq';
 import { PaymentJobData } from './payment.processor';
+import { dlqJobId, paymentJobId } from '../payments/payment-job.util';
 
 interface DlqJobData extends PaymentJobData {
   originalJobId?: string;
@@ -53,7 +54,7 @@ export class PaymentDlqService implements OnModuleInit, OnModuleDestroy {
       };
 
       await this.dlq.add('failed-payment', dlqPayload, {
-        jobId: `dlq:${data.orderId}:${job.id}`,
+        jobId: dlqJobId(data.orderId, String(job.id)),
         removeOnComplete: false,
         removeOnFail: false,
       });
@@ -79,7 +80,7 @@ export class PaymentDlqService implements OnModuleInit, OnModuleDestroy {
       ...paymentData
     } = data;
 
-    const deterministicId = `payment:${paymentData.orderId}`;
+    const deterministicId = paymentJobId(paymentData.orderId);
 
     // Remove completed/failed job with same id so re-add works
     const existing = await this.paymentQueue.getJob(deterministicId);

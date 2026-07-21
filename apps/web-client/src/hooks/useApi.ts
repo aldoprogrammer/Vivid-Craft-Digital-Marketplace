@@ -391,10 +391,58 @@ export function useRegister() {
   });
 }
 
+export function useCheckoutOptions() {
+  return useQuery({
+    queryKey: ['checkout-options'],
+    queryFn: async () => {
+      const { data } = await apiClient.get<CheckoutOptions>(
+        '/api/transactions/checkout/options',
+      );
+      return data;
+    },
+    staleTime: 60_000,
+  });
+}
+
+export function usePaymentMethods() {
+  const { data } = useCheckoutOptions();
+  return {
+    data: data?.methods,
+    isLoading: !data,
+  };
+}
+
+export type PaymentProviderId = 'STRIPE' | 'XENDIT' | 'SIMULATED';
+export type CheckoutCurrencyCode = 'USD' | 'IDR';
+
+export interface CheckoutCurrencyOption {
+  code: CheckoutCurrencyCode;
+  label: string;
+  symbol: string;
+  flag: string;
+  hint?: string;
+}
+
+export interface PaymentMethod {
+  id: PaymentProviderId;
+  currency: CheckoutCurrencyCode;
+  label: string;
+  description: string;
+  channels: string[];
+}
+
+export interface CheckoutOptions {
+  currencies: CheckoutCurrencyOption[];
+  methods: PaymentMethod[];
+  usdToIdr: number;
+}
+
 export function useCheckout() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (payload: {
+      checkoutCurrency: CheckoutCurrencyCode;
+      paymentProvider: PaymentProviderId;
       items: {
         productId: string;
         productName: string;
@@ -409,6 +457,58 @@ export function useCheckout() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['orders'] });
       queryClient.invalidateQueries({ queryKey: ['purchases'] });
+    },
+  });
+}
+
+export function useAbandonCheckout() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (orderId: string) => {
+      const { data } = await apiClient.post(
+        `/api/transactions/checkout/${orderId}/abandon`,
+      );
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['orders'] });
+      queryClient.invalidateQueries({ queryKey: ['owned-product-ids'] });
+    },
+  });
+}
+
+export function useResumePayment() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (orderId: string) => {
+      const { data } = await apiClient.post<{
+        orderId: string;
+        status: string;
+        checkoutUrl: string | null;
+      }>(`/api/transactions/checkout/${orderId}/resume`);
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['orders'] });
+      queryClient.invalidateQueries({ queryKey: ['purchases'] });
+      queryClient.invalidateQueries({ queryKey: ['owned-product-ids'] });
+    },
+  });
+}
+
+export function useConfirmPayment() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (orderId: string) => {
+      const { data } = await apiClient.post<{ orderId: string; status: string; confirmed: boolean }>(
+        `/api/transactions/checkout/${orderId}/confirm`,
+      );
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['orders'] });
+      queryClient.invalidateQueries({ queryKey: ['purchases'] });
+      queryClient.invalidateQueries({ queryKey: ['owned-product-ids'] });
     },
   });
 }

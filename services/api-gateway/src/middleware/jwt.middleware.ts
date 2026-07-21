@@ -51,6 +51,7 @@ const PUBLIC_RULES: PublicRule[] = [
       p.startsWith('/api/images/health/'),
   },
   { methods: ['POST'], test: (p) => p === '/api/transactions/webhooks/stripe' },
+  { methods: ['POST'], test: (p) => p === '/api/transactions/webhooks/xendit' },
   // EventSource cannot set Authorization; token verified in transaction-service
   { methods: ['GET'], test: (p) => p === '/api/transactions/notifications/stream' },
   {

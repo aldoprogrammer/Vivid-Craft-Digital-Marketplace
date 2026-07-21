@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { ProductCard } from '@/components/ProductCard';
-import { useCartStore } from '@/stores/cartStore';
+import { useAddToCart } from '@/hooks/useAddToCart';
 import { useAuthStore } from '@/stores/authStore';
 import { useOwnedProductIds } from '@/hooks/useApi';
 import { notify } from '@/lib/toast';
@@ -19,7 +19,8 @@ export function ProfileProductGrid({
   emptyTitle,
   emptyDescription,
 }: ProfileProductGridProps) {
-  const addItem = useCartStore((s) => s.addItem);
+  const addToCart = useAddToCart();
+  const { isAuthenticated } = useAuthStore();
   const user = useAuthStore((s) => s.user);
   const { data: ownedIds = [] } = useOwnedProductIds(
     user?.role === 'FAN' ? user.id : undefined,
@@ -75,15 +76,18 @@ export function ProfileProductGrid({
                   notify.error('You already own this product');
                   return;
                 }
-                addItem({
-                  productId: product._id,
-                  productName: product.title,
-                  productType: product.type,
-                  price: product.price,
-                  quantity: 1,
-                });
-                notify.success(`"${product.title}" added to cart`);
+                addToCart(
+                  {
+                    productId: product._id,
+                    productName: product.title,
+                    productType: product.type,
+                    price: product.price,
+                    quantity: 1,
+                  },
+                  product.title,
+                );
               }}
+              addToCartLabel={isAuthenticated ? 'Add to Cart' : 'Sign in to buy'}
             />
           </div>
         );

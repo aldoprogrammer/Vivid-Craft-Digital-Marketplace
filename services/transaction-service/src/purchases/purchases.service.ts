@@ -63,7 +63,7 @@ export class PurchasesService {
       where: {
         order: {
           userId,
-          status: { in: [OrderStatus.PAID, OrderStatus.PROCESSING, OrderStatus.PENDING] },
+          status: OrderStatus.PAID,
         },
       },
       select: { productId: true },

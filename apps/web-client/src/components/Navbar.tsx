@@ -12,7 +12,7 @@ const NAV_LINKS = [
   { to: '/admin', label: 'Admin', adminOnly: true },
   { to: '/library', label: 'Library', authOnly: true },
   { to: '/orders', label: 'Orders', authOnly: true },
-  { to: '/cart', label: 'Cart' },
+  { to: '/cart', label: 'Cart', authOnly: true },
 ];
 
 function ThemeToggle() {
@@ -119,18 +119,6 @@ export function Navbar() {
                 </Link>
               </>
             )}
-
-            <Link
-              to="/cart"
-              className="md:hidden relative inline-flex items-center rounded-xl border border-white/15 bg-white/5 py-2 px-3 text-sm font-medium text-white"
-            >
-              Cart
-              {itemCount > 0 && (
-                <span className="absolute -top-1.5 -right-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-brand-accent px-1 text-[10px] font-bold text-ink">
-                  {itemCount}
-                </span>
-              )}
-            </Link>
           </div>
         </div>
       </div>

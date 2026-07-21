@@ -33,3 +33,7 @@ Before any UI or styling work, read:
 - Monorepo: NestJS microservices + React/Vite web client + Flask image processor
 - Gateway: `services/api-gateway` (port 3000)
 - Auth: email/password JWT only
+
+## Testing
+
+Before finishing logic or flow changes, read `.cursor/skills/automation-testing/SKILL.md` and run `npm run test:unit`. Add regression tests for bugs fixed.

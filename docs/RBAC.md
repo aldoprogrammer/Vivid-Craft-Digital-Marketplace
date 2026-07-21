@@ -14,7 +14,7 @@ Current implementation and enforcement model.
 
 ---
 
-## Current state (2026-07-17)
+## Current state (2026-07-21)
 
 | Layer | Status | Detail |
 |-------|--------|--------|
@@ -62,6 +62,7 @@ Public without Bearer token:
 - `GET /api/transactions/reviews/product/:id`
 - `GET /api/transactions/profile/:id/{library,top-products,sales-count}`
 - `POST /api/transactions/webhooks/stripe`
+- `POST /api/transactions/webhooks/xendit`
 - `/health*`, `/metrics`, `/api/docs*`
 
 Protected examples (401 without token at gateway):

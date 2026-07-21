@@ -1,50 +1,75 @@
-import { useEffect, useState } from 'react';
-import { Link, Navigate } from 'react-router-dom';
-import * as Yup from 'yup';
-import { FormEngine } from '@/components/FormEngine';
+import { useEffect, useRef } from 'react';
+import { Link, Navigate, useSearchParams } from 'react-router-dom';
 import { PageHeader } from '@/components/PageHeader';
 import { EmptyState } from '@/components/EmptyState';
 import { useAuthStore } from '@/stores/authStore';
 import { useAuthHydrated } from '@/hooks/useAuthHydrated';
 import { useCartStore, selectCartItems, selectCartTotal } from '@/stores/cartStore';
-import { useCheckout, useOwnedProductIds } from '@/hooks/useApi';
-import { getApiErrorMessage } from '@/lib/errors';
+import { useAbandonCheckout, useOwnedProductIds } from '@/hooks/useApi';
+import {
+  clearPendingCheckoutOrderId,
+  getPendingCheckoutOrderId,
+} from '@/lib/checkoutSession';
 import { notify } from '@/lib/toast';
-
-const STATUS_LABEL: Record<string, string> = {
-  PENDING: 'Pending — payment processing',
-  PROCESSING: 'Processing payment',
-  PAID: 'Paid',
-  FAILED: 'Payment failed',
-};
-
-const checkoutSchema = Yup.object({
-  confirmEmail: Yup.string().email('Invalid email').required('Email confirmation required'),
-});
 
 const TYPE_EMOJI: Record<string, string> = { COMIC: '📚', ART: '🎨', ASSET: '📦' };
 
 export function CartPage() {
   const hydrated = useAuthHydrated();
   const { user, isAuthenticated } = useAuthStore();
+  const [searchParams, setSearchParams] = useSearchParams();
   const items = useCartStore(selectCartItems);
   const total = useCartStore(selectCartTotal);
   const removeItem = useCartStore((s) => s.removeItem);
   const updateQuantity = useCartStore((s) => s.updateQuantity);
-  const clearCart = useCartStore((s) => s.clearCart);
-  const checkoutMutation = useCheckout();
-  const [orderResult, setOrderResult] = useState<Record<string, unknown> | null>(null);
   const { data: ownedIds = [] } = useOwnedProductIds(user?.id);
+  const abandonCheckout = useAbandonCheckout();
+  const prunedOwnedRef = useRef<string>('');
 
   useEffect(() => {
-    if (!ownedIds.length) return;
+    if (searchParams.get('cancelled') !== '1') return;
+
+    let active = true;
+    void (async () => {
+      const orderId = getPendingCheckoutOrderId();
+      if (orderId) {
+        try {
+          await abandonCheckout.mutateAsync(orderId);
+        } catch {
+          /* order may already be failed */
+        }
+        clearPendingCheckoutOrderId();
+      }
+      if (!active) return;
+      notify.info('Payment cancelled. Your cart is unchanged.');
+      setSearchParams({}, { replace: true });
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, [searchParams, setSearchParams, abandonCheckout]);
+
+  useEffect(() => {
+    if (!ownedIds.length || !items.length) return;
+
     const owned = new Set(ownedIds);
     const ownedInCart = items.filter((i) => owned.has(i.productId));
     if (!ownedInCart.length) return;
+
+    const fingerprint = ownedInCart.map((i) => i.productId).sort().join(',');
+    if (prunedOwnedRef.current === fingerprint) return;
+    prunedOwnedRef.current = fingerprint;
+
     for (const item of ownedInCart) {
       removeItem(item.productId);
     }
-    notify.error('Removed already-owned products from your cart');
+
+    if (ownedInCart.length === 1) {
+      notify.info(`"${ownedInCart[0].productName}" is already in your Library — removed from cart.`);
+    } else {
+      notify.info(`${ownedInCart.length} items already in your Library — removed from cart.`);
+    }
   }, [ownedIds, items, removeItem]);
 
   if (!hydrated) {
@@ -57,42 +82,6 @@ export function CartPage() {
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
-  }
-
-  if (orderResult) {
-    return (
-      <div className="max-w-lg mx-auto text-center py-16 animate-slide-up">
-        <div className="glass-panel p-10">
-          <div className="flex h-20 w-20 items-center justify-center rounded-full bg-green-500/15 border border-green-500/30 text-4xl mx-auto mb-6">
-            ✓
-          </div>
-          <h2 className="text-2xl font-bold text-content mb-2">Order Placed!</h2>
-          <p className="text-mist mb-6">
-            {STATUS_LABEL[orderResult.status as string] ?? 'Payment is being processed.'}
-          </p>
-          <div className="rounded-xl bg-surface-elevated border border-surface-border p-4 mb-6 text-left space-y-2">
-            <div className="flex justify-between text-sm">
-              <span className="text-mist">Invoice</span>
-              <span className="text-content font-mono">{orderResult.invoiceNo as string}</span>
-            </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-mist">Status</span>
-              <span className="text-brand-accent-deep font-medium">
-                {STATUS_LABEL[orderResult.status as string] ?? (orderResult.status as string)}
-              </span>
-            </div>
-          </div>
-          <div className="flex flex-col sm:flex-row gap-3 justify-center">
-            <Link to="/orders" className="btn-primary">
-              View My Orders
-            </Link>
-            <Link to="/" className="btn-secondary">
-              Continue Shopping
-            </Link>
-          </div>
-        </div>
-      </div>
-    );
   }
 
   if (items.length === 0) {
@@ -178,47 +167,9 @@ export function CartPage() {
               <span>Total</span>
               <span className="text-brand-accent-deep">${total.toFixed(2)}</span>
             </div>
-            <FormEngine
-              initialValues={{ confirmEmail: user?.email || '' }}
-              validationSchema={checkoutSchema}
-              fields={[
-                { name: 'confirmEmail', label: 'Confirm Email', type: 'email', placeholder: user?.email },
-              ]}
-              submitLabel="Complete Checkout"
-              onSubmit={async () => {
-                const toastId = notify.loading('Processing checkout...');
-                try {
-                  const result = (await checkoutMutation.mutateAsync({
-                    items: items.map((i) => ({
-                      productId: i.productId,
-                      productName: i.productName,
-                      productType: i.productType,
-                      price: i.price,
-                      quantity: i.quantity,
-                    })),
-                  })) as Record<string, unknown>;
-                  notify.dismiss(toastId);
-                  clearCart();
-                  if (typeof result.checkoutUrl === 'string' && result.checkoutUrl) {
-                    notify.success('Redirecting to Stripe Checkout…');
-                    window.location.href = result.checkoutUrl;
-                    return;
-                  }
-                  notify.success('Checkout started! Track status in My Orders.');
-                  setOrderResult(result);
-                } catch (err) {
-                  notify.dismiss(toastId);
-                  const message = getApiErrorMessage(
-                    err,
-                    'Checkout failed. Please try again.',
-                  );
-                  notify.error(message);
-                  if (message.includes('already own')) {
-                    clearCart();
-                  }
-                }
-              }}
-            />
+            <Link to="/checkout" className="btn-primary w-full text-center block py-3">
+              Proceed to checkout
+            </Link>
           </div>
         </div>
       </div>

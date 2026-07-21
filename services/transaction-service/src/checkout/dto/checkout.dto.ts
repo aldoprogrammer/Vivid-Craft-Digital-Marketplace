@@ -1,4 +1,4 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   IsString,
   IsArray,
@@ -6,8 +6,12 @@ import {
   IsNumber,
   Min,
   ArrayMinSize,
+  IsEnum,
+  IsOptional,
 } from 'class-validator';
 import { Type } from 'class-transformer';
+import { PaymentProvider } from './payment-provider.enum';
+import { CheckoutCurrency } from './checkout-currency.enum';
 
 export class CheckoutItemDto {
   @ApiProperty({ example: 'product-uuid' })
@@ -40,4 +44,13 @@ export class CheckoutDto {
   @ValidateNested({ each: true })
   @Type(() => CheckoutItemDto)
   items!: CheckoutItemDto[];
+
+  @ApiProperty({ enum: CheckoutCurrency, example: CheckoutCurrency.USD })
+  @IsEnum(CheckoutCurrency)
+  checkoutCurrency!: CheckoutCurrency;
+
+  @ApiPropertyOptional({ enum: PaymentProvider, example: PaymentProvider.STRIPE })
+  @IsOptional()
+  @IsEnum(PaymentProvider)
+  paymentProvider?: PaymentProvider;
 }

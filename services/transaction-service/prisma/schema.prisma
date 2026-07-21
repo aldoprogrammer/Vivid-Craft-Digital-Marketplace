@@ -60,9 +60,10 @@ model Payment {
   status               PaymentStatus @default(PENDING)
   transactionId        String        @unique
   method               String        @default("SIMULATED")
-  stripeSessionId      String?
+  stripeSessionId       String?
   stripePaymentIntentId String?
-  processedAt          DateTime?
+  xenditInvoiceId       String?
+  processedAt           DateTime?
   createdAt            DateTime      @default(now())
 
   @@map("payments")
@@ -149,6 +150,14 @@ model StripeWebhookEvent {
   processedAt DateTime @default(now())
 
   @@map("stripe_webhook_events")
+}
+
+model XenditWebhookEvent {
+  id          String   @id // xendit event id
+  type        String
+  processedAt DateTime @default(now())
+
+  @@map("xendit_webhook_events")
 }
 
 model ProcessedEvent {

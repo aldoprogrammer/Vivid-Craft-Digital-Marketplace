@@ -18,6 +18,7 @@ interface ProductCardProps {
   previewImageUrl?: string;
   isWatermarked?: boolean;
   onAddToCart: () => void;
+  addToCartLabel?: string;
   onFavorite?: () => void;
   isFavorite?: boolean;
   favoriteCount?: number;
@@ -37,6 +38,7 @@ export function ProductCard({
   previewImageUrl,
   isWatermarked = false,
   onAddToCart,
+  addToCartLabel = 'Add to Cart',
   onFavorite,
   isFavorite = false,
   favoriteCount = 0,
@@ -127,7 +129,7 @@ export function ProductCard({
               disabled={alreadyOwned}
               className="btn-primary py-2 px-4 text-xs disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {alreadyOwned ? 'Owned' : 'Add to Cart'}
+              {alreadyOwned ? 'Owned' : addToCartLabel}
             </button>
           </div>
         </div>

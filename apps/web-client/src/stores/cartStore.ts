@@ -75,8 +75,10 @@ export const useCartStore = create<CartState>()(
       },
 
       addItem: (item) =>
-        set((state) => ({
-          cartsByUser: updateUserCart(state.cartsByUser, state.activeUserId, (items) => {
+        set((state) => {
+          if (!state.activeUserId) return state;
+          return {
+            cartsByUser: updateUserCart(state.cartsByUser, state.activeUserId, (items) => {
             const existing = items.find((i) => i.productId === item.productId);
             if (existing) {
               return items.map((i) =>
@@ -87,7 +89,8 @@ export const useCartStore = create<CartState>()(
             }
             return [...items, item];
           }),
-        })),
+          };
+        }),
 
       removeItem: (productId) =>
         set((state) => ({

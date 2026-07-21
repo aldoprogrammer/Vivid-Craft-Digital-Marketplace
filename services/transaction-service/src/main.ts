@@ -34,6 +34,7 @@ async function bootstrap() {
     .addTag('Reviews', 'Product reviews and replies')
     .addTag('Profile', 'Public user profile data')
     .addTag('Stripe', 'Stripe webhooks')
+    .addTag('Xendit', 'Xendit webhooks')
     .addTag('Notifications', 'SSE real-time notifications')
     .addBearerAuth()
     .build();

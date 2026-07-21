@@ -19,7 +19,7 @@ export class PurchasesController {
   }
 
   @Get('owned-ids')
-  @ApiOperation({ summary: 'List product IDs owned or already in checkout by the current user' })
+  @ApiOperation({ summary: 'List product IDs the user has fully paid for (Library)' })
   ownedIds(@CurrentUser() user: JwtPayload) {
     return this.purchasesService.findOwnedProductIds(user.sub);
   }

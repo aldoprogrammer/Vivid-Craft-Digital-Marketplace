@@ -90,6 +90,8 @@ Alert rules: `infra/observability/prometheus/rules/vividcraft-alerts.yml`
 ## Synthetic checks
 
 - Script: `tests/synthetic/checkout-flow.js` (login → products → health)
+- Unit: `npm run test:unit` (gateway JWT, Redis scan, Vitest helpers)
+- E2E: `npm run test:e2e` (Playwright smoke — marketplace, login, orders auth gate)
 - Schedule locally with cron/Task Scheduler; alert after 3 consecutive failures (rule placeholder in Prometheus)
 
 ---

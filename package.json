@@ -19,8 +19,15 @@
     "install:web": "cd apps/web-client && npm install",
     "test:gateway": "cd services/api-gateway && npm test",
     "test:scan": "cd services/marketplace-service && npx ts-node --transpile-only src/redis/redis.scan.test.ts",
-    "test:unit": "npm run test:gateway && npm run test:scan",
+    "test:web": "cd apps/web-client && npm test",
+    "test:unit": "npm run test:gateway && npm run test:scan && npm run test:web",
+    "test:e2e": "playwright test -c tests/e2e/playwright.config.ts",
+    "test:e2e:ui": "playwright test -c tests/e2e/playwright.config.ts --ui",
+    "test": "npm run test:unit && npm run test:e2e",
     "synthetic": "node tests/synthetic/checkout-flow.js"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.50.1"
   },
   "engines": {
     "node": ">=20.0.0"

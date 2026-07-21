@@ -15,6 +15,7 @@ import { CreatorModule } from './creator/creator.module';
 import { ReviewsModule } from './reviews/reviews.module';
 import { ProfileModule } from './profile/profile.module';
 import { StripeModule } from './stripe/stripe.module';
+import { XenditModule } from './xendit/xendit.module';
 import { MailModule } from './mail/mail.module';
 
 @Module({
@@ -36,6 +37,7 @@ import { MailModule } from './mail/mail.module';
     HealthModule,
     MailModule,
     StripeModule,
+    XenditModule,
     CheckoutModule,
     OrdersModule,
     QueueModule,

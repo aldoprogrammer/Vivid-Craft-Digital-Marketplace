@@ -21,7 +21,16 @@ Planning, audit, and execution guides for the platform.
 | [REALTIME_EVENT_DRIVEN_STRATEGY.md](./REALTIME_EVENT_DRIVEN_STRATEGY.md) | Redis Pub/Sub + SSE only (no polling) |
 | [RBAC.md](./RBAC.md) | Roles, permission matrix, API enforcement |
 | [SLA.md](./SLA.md) | Uptime, latency targets, monitoring setup |
+| [RUNBOOK.md](./RUNBOOK.md) | Incidents: 429, payments, Redis, Stripe/Xendit |
 | [brand_guide/](./brand_guide/) | Colours, typography, tokens, visual showcase |
+
+## Testing
+
+| Resource | Purpose |
+|----------|---------|
+| [../.cursor/skills/automation-testing/SKILL.md](../.cursor/skills/automation-testing/SKILL.md) | Agent workflow for unit + E2E |
+| `npm run test:unit` | Vitest + gateway assert tests |
+| `npm run test:e2e` | Playwright smoke against local Docker |
 
 ---
 

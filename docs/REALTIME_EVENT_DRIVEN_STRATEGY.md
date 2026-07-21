@@ -50,7 +50,7 @@ Envelope includes optional `correlationId`.
 ## Idempotency & DLQ
 
 - Redis `SET event:{id} NX EX` + DB unique `eventId` / Stripe event id / ProcessedEvent
-- Payment jobs: `jobId = payment:{orderId}`; conditional PAID/FAILED updates
+- Payment jobs: `jobId = payment-{orderId}`; conditional PAID/FAILED updates
 - Terminal BullMQ failures → `payment-processing-dlq`; ADMIN `POST /payments/dlq/:jobId/replay`
 
 ---

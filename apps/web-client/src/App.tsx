@@ -6,6 +6,7 @@ import { LoginPage } from '@/pages/LoginPage';
 import { RegisterPage } from '@/pages/RegisterPage';
 import { CreatorDashboardPage } from '@/pages/CreatorDashboardPage';
 import { CartPage } from '@/pages/CartPage';
+import { CheckoutPage } from '@/pages/CheckoutPage';
 import { OrdersPage } from '@/pages/OrdersPage';
 import { LibraryPage } from '@/pages/LibraryPage';
 import { ProductReviewsPage } from '@/pages/ProductReviewsPage';
@@ -31,6 +32,7 @@ export default function App() {
             <Route path="/profile/edit" element={<EditProfilePage />} />
             <Route path="/admin" element={<AdminDashboardPage />} />
             <Route path="/cart" element={<CartPage />} />
+            <Route path="/checkout" element={<CheckoutPage />} />
             <Route path="/orders" element={<OrdersPage />} />
           </Routes>
         </main>
